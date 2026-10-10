@@ -1,106 +1,70 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import './App.css'
-import Epg from './components/Epg'
-import type { EpgLoad } from './components/Epg'
-import Player from './components/Player'
-import { CHANNEL, LIVE_URL, fetchSchedule } from './data/epg'
-import type { Program } from './data/epg'
-import type { Source } from './player/usePlayer'
-import { useTvNavigation } from './useTvNavigation'
+import { useCallback, useEffect, useState } from 'react'
+import { REAL_CHANNEL } from './data/channels'
+import type { Channel } from './data/channels'
+import { fetchGuide } from './data/epg'
+import type { Guide, Programme } from './data/epg'
+import GuideScreen from './screens/guide/GuideScreen'
+import PlayerScreen from './screens/player/PlayerScreen'
 
-const LIVE: Source = { kind: 'live', url: LIVE_URL, title: `${CHANNEL.name} · Live` }
+export type GuideLoad = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; guide: Guide }
+
+/** What the player screen was opened for. `programme` null = the channel's live feed. */
+export interface Selection {
+  channel: Channel
+  programme: Programme | null
+}
+
+type Screen = { name: 'guide' } | { name: 'player'; selection: Selection }
 
 export default function App() {
-  const [source, setSource] = useState<Source>(LIVE)
-  const [playingId, setPlayingId] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [load, setLoad] = useState<EpgLoad>({ state: 'loading' })
-  const [now, setNow] = useState(() => Date.now())
+  const [screen, setScreen] = useState<Screen>({ name: 'guide' })
+  const [load, setLoad] = useState<GuideLoad>({ state: 'loading' })
+  // Remembered so the guide restores focus to where the user left it.
+  const [lastFocusId, setLastFocusId] = useState<string | null>(null)
 
-  const fetchEpg = useCallback(() => {
-    fetchSchedule().then(
-      (programs) => setLoad({ state: 'ready', programs }),
+  const loadGuide = useCallback(() => {
+    fetchGuide().then(
+      (guide) => setLoad({ state: 'ready', guide }),
       (err: Error) => setLoad({ state: 'error', message: err.message }),
     )
   }, [])
 
-  const retryEpg = useCallback(() => {
+  const retryGuide = useCallback(() => {
     setLoad({ state: 'loading' })
-    fetchEpg()
-  }, [fetchEpg])
+    loadGuide()
+  }, [loadGuide])
 
-  useEffect(fetchEpg, [fetchEpg])
+  useEffect(loadGuide, [loadGuide])
 
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 30_000)
-    return () => window.clearInterval(t)
+  const openPlayer = useCallback((selection: Selection) => {
+    if (selection.programme) setLastFocusId(selection.programme.id)
+    setScreen({ name: 'player', selection })
   }, [])
 
-  // Put focus on the programme that is on air as soon as the guide is ready.
-  useEffect(() => {
-    if (load.state !== 'ready') return
-    const row = document.querySelector<HTMLElement>('[data-nav="epg"][data-current]')
-    ;(row ?? document.querySelector<HTMLElement>('[data-nav="epg"]'))?.focus()
-  }, [load.state])
+  const openLive = useCallback(() => openPlayer({ channel: REAL_CHANNEL, programme: null }), [openPlayer])
+  const backToGuide = useCallback(() => setScreen({ name: 'guide' }), [])
 
-  const backToLive = useCallback(() => {
-    setSource(LIVE)
-    setPlayingId(null)
-    setNotice(null)
-  }, [])
-
-  useTvNavigation(backToLive)
-
-  const onSelect = useCallback(
-    (p: Program) => {
-      if (now >= p.start && now < p.end) {
-        backToLive()
-        setNotice(`Playing "${p.title}" live.`)
-      } else if (p.recordingUrl) {
-        setSource({ kind: 'recording', url: p.recordingUrl, title: `${p.title} · Sample recording` })
-        setPlayingId(p.id)
-        setNotice(
-          'Prototype note: the provided recording is a 30-second clip. It is not the real content of this mock programme.',
-        )
-      } else if (p.start > now) {
-        setNotice(`"${p.title}" has not started yet.`)
-      } else {
-        setNotice(`No recording is available for "${p.title}".`)
-      }
-    },
-    [now, backToLive],
-  )
-
-  const current = useMemo(
-    () => (load.state === 'ready' ? load.programs.find((p) => now >= p.start && now < p.end) : undefined),
-    [load, now],
-  )
+  if (screen.name === 'player') {
+    return (
+      <PlayerScreen
+        // A new selection is a new playback session.
+        key={`${screen.selection.channel.id}:${screen.selection.programme?.id ?? 'live'}`}
+        selection={screen.selection}
+        guide={load.state === 'ready' ? load.guide : null}
+        onBack={backToGuide}
+        onWatchLive={openLive}
+      />
+    )
+  }
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="logo" aria-hidden="true">{CHANNEL.logoText}</div>
-        <div>
-          <h1>{CHANNEL.name}</h1>
-          <p className="sub">{current ? `On air (mock): ${current.title}` : 'Live channel'}</p>
-        </div>
-      </header>
-
-      <main className="main">
-        <div className="left">
-          <Player source={source} onBackToLive={backToLive} />
-          <p className="notice" role="status">{notice}</p>
-        </div>
-        <Epg load={load} now={now} playingId={playingId} onSelect={onSelect} onRetry={retryEpg} />
-      </main>
-
-      <footer className="hints">
-        <span>↑ ↓ Browse guide</span>
-        <span>→ Player controls</span>
-        <span>← Back to guide</span>
-        <span>Enter Select</span>
-        <span>Esc Back to live</span>
-      </footer>
-    </div>
+    <GuideScreen
+      load={load}
+      initialFocusId={lastFocusId}
+      onFocusChange={setLastFocusId}
+      onOpen={openPlayer}
+      onWatchLive={openLive}
+      onRetry={retryGuide}
+    />
   )
 }

@@ -25,6 +25,8 @@ export interface PlayerState {
   rangeEnd: number
   volume: number
   muted: boolean
+  /** Wall-clock time (ms) of media time 0, when the stream exposes one (live DASH). */
+  presentationStart: number | null
 }
 
 const INITIAL: PlayerState = {
@@ -35,6 +37,7 @@ const INITIAL: PlayerState = {
   rangeEnd: 0,
   volume: 1,
   muted: false,
+  presentationStart: null,
 }
 
 function describeError(err: unknown, kind: SourceKind): PlayerError {
@@ -69,6 +72,7 @@ function describeError(err: unknown, kind: SourceKind): PlayerError {
 
 export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: Source) {
   const [state, setState] = useState<PlayerState>(INITIAL)
+  const [attempt, setAttempt] = useState(0)
   const playerRef = useRef<shaka.Player | null>(null)
   // Destroying a Shaka player is async. The next player must wait for it, otherwise the
   // old player can detach the <video> after the new one has attached.
@@ -105,6 +109,7 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
     const sync = () => {
       if (cancelled) return
       const range = player.seekRange()
+      const start = player.isLive() ? player.getPresentationStartTimeAsDate() : null
       setState((s) => ({
         ...s,
         currentTime: video.currentTime,
@@ -112,6 +117,7 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
         rangeEnd: range.end,
         volume: video.volume,
         muted: video.muted,
+        presentationStart: start ? start.getTime() : null,
       }))
     }
 
@@ -134,6 +140,7 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
       window.clearTimeout(loadTimeout)
       patch({ status: 'playing' })
     }
+    const onSeeked = () => sync()
     const onPause = () => !video.ended && patch({ status: 'paused' })
     const onWaiting = () => patch({ status: 'buffering' })
     const onEnded = () => patch({ status: 'ended' })
@@ -145,6 +152,7 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
     video.addEventListener('waiting', onWaiting)
     video.addEventListener('ended', onEnded)
     video.addEventListener('volumechange', sync)
+    video.addEventListener('seeked', onSeeked)
     player.addEventListener('error', onShakaError)
     const timer = window.setInterval(sync, 500)
 
@@ -153,6 +161,7 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
       .then(() => (cancelled ? undefined : player.load(source.url)))
       .then(() => {
         if (cancelled) return
+        sync()
         // Browsers may block autoplay with sound. If so we stay paused and say so.
         return video.play().catch(() => patch({ status: 'paused' }))
       })
@@ -172,11 +181,12 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
       video.removeEventListener('waiting', onWaiting)
       video.removeEventListener('ended', onEnded)
       video.removeEventListener('volumechange', sync)
+      video.removeEventListener('seeked', onSeeked)
       player.removeEventListener('error', onShakaError)
       playerRef.current = null
       teardownRef.current = player.destroy().catch(() => {})
     }
-  }, [source.url, source.kind, videoRef, patch])
+  }, [source.url, source.kind, videoRef, patch, attempt])
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current
@@ -195,6 +205,19 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
     },
     [videoRef],
   )
+
+  const seekTo = useCallback(
+    (time: number) => {
+      const v = videoRef.current
+      const p = playerRef.current
+      if (!v || !p) return
+      const { start, end } = p.seekRange()
+      v.currentTime = Math.min(end, Math.max(start, time))
+    },
+    [videoRef],
+  )
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
 
   const goToLiveEdge = useCallback(() => {
     playerRef.current?.goToLive()
@@ -215,5 +238,15 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
     if (v) v.muted = !v.muted
   }, [videoRef])
 
-  return { state, togglePlay, seekBy, goToLiveEdge, changeVolume, toggleMute }
+  const setVolume = useCallback(
+    (value: number) => {
+      const v = videoRef.current
+      if (!v) return
+      v.volume = Math.min(1, Math.max(0, value))
+      v.muted = v.volume === 0
+    },
+    [videoRef],
+  )
+
+  return { state, togglePlay, seekBy, seekTo, goToLiveEdge, changeVolume, setVolume, toggleMute, retry }
 }
