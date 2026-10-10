@@ -1,0 +1,16 @@
+:root {
+  --bg: #0b0f1a;
+  --panel: #151b2b;
+  --panel-2: #1e2639;
+  --text: #f2f5fb;
+  --muted: #a9b3c9;
+  --accent: #ffd23f;
+  --live: #e5384b;
+  --rec: #3a86ff;
+  font: 24px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; }
