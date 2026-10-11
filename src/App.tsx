@@ -5,6 +5,7 @@ import { fetchGuide } from './data/epg'
 import type { Guide, Programme } from './data/epg'
 import { DEFAULT_METHODS } from './data/reminders'
 import type { ReminderMethods } from './data/reminders'
+import type { CategoryFilter } from './screens/guide/CategoryFilters'
 import GuideScreen from './screens/guide/GuideScreen'
 import PlayerScreen from './screens/player/PlayerScreen'
 
@@ -23,6 +24,8 @@ export default function App() {
   const [load, setLoad] = useState<GuideLoad>({ state: 'loading' })
   // Remembered so the guide restores the selection (and focus) to where the user left it.
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null)
+  // Guide category filter, kept here so it survives a trip to the player.
+  const [category, setCategory] = useState<CategoryFilter>('all')
   // Reminder delivery methods by programme id. Prototype: kept in memory only, see data/reminders.ts.
   const [reminders, setReminders] = useState<ReadonlyMap<string, ReminderMethods>>(() => new Map())
   // The last saved delivery methods become the default for the next new reminder.
@@ -91,6 +94,8 @@ export default function App() {
       load={load}
       initialSelectedId={lastSelectedId}
       onSelectionChange={setLastSelectedId}
+      category={category}
+      onCategoryChange={setCategory}
       reminders={reminders}
       preferredMethods={preferredMethods}
       onReminderSaved={saveReminder}

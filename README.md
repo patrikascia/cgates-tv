@@ -38,16 +38,25 @@ src/
 
 - Arrows: move keyboard focus through programmes; the preview card follows the focused programme. Up/Down keep the same point in time across channels.
 - Page Up / Page Down: jump 5 channels.
-- Enter (or Space) on a programme selects it (green block) and moves focus to the preview card's action button (**Watch now**, **Set reminder** or **Remove reminder**). Enter or Space there runs it, once, even if the key is held. Up from the first channel or Shift+Tab also reach the button.
+- Enter (or Space) on a programme selects it (green block) and moves focus to the preview card's action button (**Watch now** on air, **Watch recording** once aired, **Set reminder** / **Remove reminder** before it starts). Enter or Space there runs it, once, even if the key is held. Up from the first channel or Shift+Tab also reach the button.
 - Up from the action button: header. Down: back to the programme you came from.
 - Anything that cannot play explains why in a dialog instead of opening the player. Removing a reminder is only possible from the action button.
 - In a dialog: focus starts on the main button; arrows or Tab / Shift+Tab move between the controls (Tab wraps around inside the dialog), Enter or Space toggles a checkbox, and Esc / Backspace closes it and returns focus to the button that opened it.
 - Esc / Backspace in the grid: return to what's on now.
+- Alt+Up / Alt+Down on a programme: move its channel one row up or down.
 - Returning from the player or closing any dialog puts focus back on the programme that was selected.
 
 Mouse: hovering previews a programme and never runs anything. A click selects the programme and runs its action: on now = live playback, already aired = the recording or the unavailable state, not started = reminder setup (for a programme with a reminder, its settings; removing is done with the action button). A double-click runs it only once. While the keyboard is in use, a resting mouse pointer is ignored.
 
 States: hover = thin green outline, keyboard focus = green outline, selection = green block. Buttons stay dark: grey border at rest, green border on hover, the same single green border on hover and keyboard focus (also for every player control), green fill only while pressed. New reminders start with the delivery methods saved last time (Email if none yet), kept in memory while the app runs. The CGates green is `#21b14b`.
+
+**Category filters**
+
+The pills above the preview card show **All** (default), **Music**, **History**, **Sport** or **Movies**. Each channel belongs to exactly one category (`category` in `src/data/channels.ts`; a demo assignment based on channel names and mock schedules). All and each category keep their own channel order: reordering in one view never changes another. If a filter hides the selected programme, the programme on now on the first visible channel is selected instead. Keyboard: Down from the header (or Up from the preview card's button) reaches the active pill, Left/Right move between pills, Enter applies one. The filter is kept while you visit the player but resets to All on reload.
+
+**Channel order**
+
+Drag a channel by its logo, name or grip (the dotted handle at the far left) to move the whole row, timeline included. Rows slide aside and a dashed green slot shows where it will land; dragging near the top or bottom edge scrolls the guide, and Esc cancels. Programme blocks are never drag handles. Each view (All, Music, History, Sport, Movies) has its own order, saved together in this browser's `localStorage` (`cgates-tv.channel-orders`), so it survives a reload. An order saved by an earlier version (`cgates-tv.channel-order`, one shared order) is migrated once: every view starts from it, and the old entry is left untouched. Invalid or unavailable storage falls back to the default order. There is no backend.
 
 **Player**
 

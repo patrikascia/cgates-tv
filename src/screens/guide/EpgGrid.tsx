@@ -4,6 +4,7 @@ import ChannelLogo from '../../components/ChannelLogo'
 import { MIN, availabilityOf, phaseOf } from '../../data/epg'
 import type { Guide, Programme } from '../../data/epg'
 import { formatDay, formatRange, formatTime } from '../../lib/time'
+import { rowShift, useChannelDrag } from './useChannelDrag'
 
 export interface EpgGridHandle {
   /** Focus a programme: the given one, else the focused one, else the selected one, else what is on air on the first channel. */
@@ -26,6 +27,8 @@ interface Props {
   /** Enter / OK: confirm the programme and move on to the preview card's action button. */
   onConfirm: (p: Programme) => void
   onExitUp: () => void
+  /** Move a channel row to a new index (drag and drop, or Alt+Up/Down). */
+  onReorder: (channelId: string, to: number) => void
 }
 
 const SLOT = 30 * MIN
@@ -45,6 +48,7 @@ export default function EpgGrid({
   onOpen,
   onConfirm,
   onExitUp,
+  onReorder,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const cornerRef = useRef<HTMLDivElement>(null)
@@ -125,17 +129,54 @@ export default function EpgGrid({
 
   const currentOnRow = useCallback((row: number) => pickAt(row, Date.now()), [pickAt])
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      focus: (id?: string) => {
-        const target = id ?? focusedId ?? selectedId
-        const p = (target && rows.flat().find((x) => x.id === target)) || currentOnRow(0)
-        if (p) focusProgramme(p)
-      },
-    }),
+  // Focus a programme: the given one, else the focus target, else the selection, else
+  // what is on now on the first row. Only visible programmes qualify.
+  const focusBest = useCallback(
+    (id?: string) => {
+      const target = id ?? focusedId ?? selectedId
+      const p = (target && rows.flat().find((x) => x.id === target)) || currentOnRow(0)
+      if (p) focusProgramme(p)
+    },
     [focusedId, selectedId, rows, currentOnRow, focusProgramme],
   )
+  useImperativeHandle(ref, () => ({ focus: focusBest }), [focusBest])
+
+  // Reordering re-renders the rows; keyboard focus is put back on the same programme.
+  const restoreFocus = useRef<{ id: string; reveal: boolean } | null>(null)
+  // The cell that last had keyboard focus, to notice when a re-render removes it.
+  const lastCell = useRef<HTMLElement | null>(null)
+  const reorder = useCallback(
+    (channelId: string, to: number, reveal = false) => {
+      const active = document.activeElement as HTMLElement | null
+      const id = scrollRef.current?.contains(active) ? active?.dataset.id : undefined
+      restoreFocus.current = id ? { id, reveal } : null
+      onReorder(channelId, to)
+    },
+    [onReorder],
+  )
+  useLayoutEffect(() => {
+    const r = restoreFocus.current
+    restoreFocus.current = null
+    const el = r && cellEl(r.id)
+    if (el) {
+      if (document.activeElement !== el) el.focus({ preventScroll: true })
+      if (r.reveal) reveal(el)
+      return
+    }
+    // A filter can remove the focused cell (in browsers that do not move focus to a
+    // clicked button, focus is still on it). Never let focus drop to the page.
+    const removed = lastCell.current !== null && !lastCell.current.isConnected
+    const idle = !document.activeElement || document.activeElement === document.body
+    if (removed && idle) focusBest()
+  }, [channels, reveal, focusBest])
+
+  // The one cell reachable with Tab: the focus target, else the selection, else what is
+  // on now on the first row, so the grid can always be entered from the keyboard.
+  const tabStopId = focusedId ?? selectedId ?? currentOnRow(0)?.id ?? null
+
+  const channelIds = useMemo(() => channels.map((c) => c.id), [channels])
+  const { drag, bind: dragHandle, onScroll: onDragScroll } = useChannelDrag(scrollRef, channelIds, reorder)
+
 
   // Initial position: "now" a little in from the left edge, then the selected programme.
   // Runs once; later selection changes come from the user and must not re-scroll.
@@ -168,6 +209,7 @@ export default function EpgGrid({
   }
 
   const onScroll = () => {
+    onDragScroll()
     const t = timeAtViewLeft()
     if (formatDay(t, now) !== formatDay(viewDayTime, now)) setViewDayTime(t)
   }
@@ -176,6 +218,13 @@ export default function EpgGrid({
     const id = (e.target as HTMLElement).dataset.id
     const pos = id ? index.get(id) : undefined
     if (!pos) return
+    // Alt+Up / Alt+Down: keyboard alternative to dragging the focused programme's channel.
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault()
+      const to = pos.row + (e.key === 'ArrowDown' ? 1 : -1)
+      if (to >= 0 && to < channels.length) reorder(channels[pos.row].id, to, true)
+      return
+    }
     let next: Programme | undefined
     switch (e.key) {
       case 'Enter':
@@ -237,7 +286,7 @@ export default function EpgGrid({
   const nowVisible = now >= windowStart && now < windowEnd
 
   return (
-    <div className="epg" onPointerLeave={() => onHover(null)}>
+    <div className="epg" data-dragging={drag ? '' : undefined} onPointerLeave={() => onHover(null)}>
       <div
         className="epg-scroll"
         ref={scrollRef}
@@ -273,9 +322,18 @@ export default function EpgGrid({
           </div>
 
           {channels.map((c, row) => (
-            <section className="epg-row" key={c.id} aria-label={`${c.name}${c.streamUrl ? '' : ', demo channel'}`}>
-              <div className="epg-channel">
-                <span className="epg-channel-num">{c.number}</span>
+            <section
+              className={`epg-row${drag?.from === row ? ' is-dragging' : ''}`}
+              key={c.id}
+              aria-label={`${c.name}${c.streamUrl ? '' : ', demo channel'}`}
+              style={
+                drag
+                  ? ({ '--shift': `${rowShift(drag, row)}px`, '--dy': `${drag.dy}px` } as CSSProperties)
+                  : undefined
+              }
+            >
+              <div className="epg-channel" title="Drag to reorder (or Alt+↑/↓ on a programme)" {...dragHandle(row)}>
+                <span className="epg-grip" aria-hidden="true" />
                 <ChannelLogo channel={c} />
                 <span className="epg-channel-text">
                   <span className="epg-channel-name">{c.name}</span>
@@ -302,11 +360,18 @@ export default function EpgGrid({
                       data-id={p.id}
                       className={`cell phase-${phase}${p.id === selectedId ? ' is-selected' : ''}`}
                       style={{ '--x': x, '--w': w, '--progress': progress } as CSSProperties}
-                      tabIndex={p.id === (focusedId ?? selectedId) ? 0 : -1}
+                      tabIndex={p.id === tabStopId ? 0 : -1}
                       aria-label={`${p.title}, ${formatRange(p.start, p.end)}, ${status}`}
                       aria-pressed={p.id === selectedId}
                       onPointerEnter={() => onHover(p)}
-                      onFocus={() => onFocusProgramme(p)}
+                      onFocus={(e) => {
+                        lastCell.current = e.currentTarget
+                        onFocusProgramme(p)
+                      }}
+                      onBlur={(e) => {
+                        // Focus moved on to something else on purpose: stop tracking.
+                        if (e.relatedTarget && !(e.relatedTarget as HTMLElement).dataset.id) lastCell.current = null
+                      }}
                       onClick={(e) => onCellClick(e, p)}
                     >
                       <span className="cell-inner">
@@ -324,6 +389,14 @@ export default function EpgGrid({
               </div>
             </section>
           ))}
+
+          {drag && (
+            <div
+              className="epg-drop-slot"
+              style={{ '--slot-top': `${drag.firstTop + drag.to * drag.rowH}px` } as CSSProperties}
+              aria-hidden="true"
+            />
+          )}
 
           {nowVisible && (
             <div className="epg-now-line" ref={nowLineRef} style={{ '--x': nowMin } as CSSProperties} aria-hidden="true" />

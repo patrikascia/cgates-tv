@@ -120,7 +120,13 @@ export default function DetailsPanel({ programme: p, channel, now, hasReminder, 
             onBlur={() => setPressed(false)}
           >
             <Icon name={upcoming ? (hasReminder ? 'bellOff' : 'bell') : 'play'} />
-            {upcoming ? (hasReminder ? 'Remove reminder' : 'Set reminder') : 'Watch now'}
+            {upcoming
+              ? hasReminder
+                ? 'Remove reminder'
+                : 'Set reminder'
+              : phase === 'past'
+                ? 'Watch recording'
+                : 'Watch now'}
           </button>
         </div>
       </div>

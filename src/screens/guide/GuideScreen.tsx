@@ -2,11 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GuideLoad, Selection } from '../../App'
 import AppHeader from '../../components/AppHeader'
 import Icon from '../../components/Icon'
+import { REAL_CHANNEL } from '../../data/channels'
 import type { Channel } from '../../data/channels'
-import { availabilityOf, phaseOf } from '../../data/epg'
+import { availabilityOf, phaseOf, programmeAt } from '../../data/epg'
 import type { Programme } from '../../data/epg'
 import type { ReminderMethods } from '../../data/reminders'
 import { useNow } from '../../lib/time'
+import CategoryFilters from './CategoryFilters'
+import type { CategoryFilter } from './CategoryFilters'
+import { useChannelOrders } from './channelOrder'
 import DetailsPanel from './DetailsPanel'
 import EpgGrid from './EpgGrid'
 import type { EpgGridHandle } from './EpgGrid'
@@ -19,6 +23,8 @@ interface Props {
   /** Programme to select and focus on arrival, e.g. the one just watched. */
   initialSelectedId: string | null
   onSelectionChange: (id: string) => void
+  category: CategoryFilter
+  onCategoryChange: (category: CategoryFilter) => void
   /** Reminder delivery methods by programme id. */
   reminders: ReadonlyMap<string, ReminderMethods>
   /** Delivery methods pre-selected for a new reminder: the last ones saved, else Email. */
@@ -35,18 +41,31 @@ type Dialog = { kind: DialogKind; programme: Programme; channel: Channel }
 const navItems = (group: string) =>
   Array.from(document.querySelectorAll<HTMLElement>(`[data-nav="${group}"]:not(:disabled)`))
 
-// Arrow keys run one vertical path: header -> preview card action -> programme grid.
+// Arrow keys run one vertical path: header -> category filters -> preview card action ->
+// programme grid.
 const focusAction = () => {
   const el = navItems('details')[0] ?? navItems('header')[0]
+  el?.focus()
+}
+// Entering the filter row lands on the active category.
+const focusFilters = () => {
+  const el =
+    document.querySelector<HTMLElement>('[data-nav="filters"][aria-pressed="true"]') ??
+    navItems('filters')[0] ??
+    navItems('details')[0]
   el?.focus()
 }
 
 type Zone = 'grid' | 'details' | 'other'
 
+const NO_CHANNELS: Channel[] = []
+
 export default function GuideScreen({
   load,
   initialSelectedId,
   onSelectionChange,
+  category,
+  onCategoryChange,
   reminders,
   preferredMethods,
   onReminderSaved,
@@ -69,6 +88,12 @@ export default function GuideScreen({
   const dialogOpen = dialog !== null
 
   const guide = load.state === 'ready' ? load.guide : null
+  // The user's own channel order (drag and drop), saved in this browser.
+  // All and each category have their own saved channel order (drag and drop).
+  const { channelsFor, moveChannel } = useChannelOrders(guide?.channels ?? NO_CHANNELS)
+  const visibleChannels = useMemo(() => channelsFor(category), [channelsFor, category])
+  const orderedGuide = useMemo(() => guide && { ...guide, channels: visibleChannels }, [guide, visibleChannels])
+  const reorderVisible = useCallback((id: string, to: number) => moveChannel(category, id, to), [moveChannel, category])
   const channelById = useMemo(() => new Map(guide?.channels.map((c) => [c.id, c])), [guide])
   const programmeById = useMemo(
     () => new Map(Object.values(guide?.programmes ?? {}).flatMap((list) => list.map((p) => [p.id, p]))),
@@ -82,6 +107,29 @@ export default function GuideScreen({
       onSelectionChange(p.id)
     },
     [onSelectionChange],
+  )
+
+  // A category change that hides the selection selects what is on now on the first
+  // visible channel (and makes it the grid's focus target); a hidden focus target moves to
+  // the selection. Keyboard focus itself stays on the filter pill.
+  const changeCategory = useCallback(
+    (next: CategoryFilter) => {
+      onCategoryChange(next)
+      if (!guide) return
+      const visible = channelsFor(next)
+      const shown = new Set(visible.map((c) => c.id))
+      const onScreen = (id: string | null) => !!id && shown.has(programmeById.get(id)?.channelId ?? '')
+      const list = visible[0] ? guide.programmes[visible[0].id] : undefined
+      const first = programmeAt(list, Date.now()) ?? list?.[0]
+      if (!first) return
+      if (selectedId && !onScreen(selectedId)) {
+        select(first)
+        setFocusedId(first.id)
+      } else if (!onScreen(focusedId)) {
+        setFocusedId(selectedId ?? first.id)
+      }
+    },
+    [onCategoryChange, guide, channelsFor, programmeById, selectedId, focusedId, select],
   )
 
   useEffect(() => {
@@ -153,12 +201,18 @@ export default function GuideScreen({
     const onKey = (e: KeyboardEvent) => {
       // Already handled, e.g. by the grid, which may have just moved focus out of itself.
       if (e.defaultPrevented) return
+      // Modified keys are not navigation here (Alt+Left is the browser's Back; Alt+Up/Down
+      // only reorders channels inside the grid). Browsers also do not show :focus-visible
+      // for focus moved by them.
+      if (e.altKey || e.ctrlKey || e.metaKey) return
       const active = document.activeElement as HTMLElement | null
       const group = active?.dataset.nav
       if (active?.dataset.id) return // grid cells handle their own keys
 
       if (!group) {
-        if (e.key.startsWith('Arrow')) {
+        // Focus is nowhere useful (e.g. after a click on empty space): any navigation key
+        // brings it back to the grid.
+        if (e.key.startsWith('Arrow') || e.key.startsWith('Page')) {
           e.preventDefault()
           if (gridRef.current) gridRef.current.focus()
           else navItems('header')[0]?.focus()
@@ -173,11 +227,13 @@ export default function GuideScreen({
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         if (group === 'header' && !gridRef.current) navItems('state')[0]?.focus()
-        else if (group === 'header' && navItems('details').length) focusAction()
+        else if (group === 'header') focusFilters()
+        else if (group === 'filters') focusAction()
         else gridRef.current?.focus()
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
-        if (group !== 'header') navItems('header')[0]?.focus()
+        if (group === 'details') focusFilters()
+        else if (group !== 'header') navItems('header')[0]?.focus()
       } else if (e.key === 'Escape' || e.key === 'Backspace') {
         e.preventDefault()
         gridRef.current?.focus()
@@ -195,9 +251,16 @@ export default function GuideScreen({
   // The preview card shows, in order: the hovered programme (only while the mouse is in
   // use and the card's own button is not focused), the keyboard-focused programme while
   // focus is in the grid, then the confirmed selection. Its button always acts on it.
-  const focused = focusedId ? programmeById.get(focusedId) : undefined
-  const selected = selectedId ? programmeById.get(selectedId) : undefined
-  const hover = input === 'pointer' && zone !== 'details' ? hovered : null
+  // Guard: a selection or focus target on a channel that is not shown is treated as
+  // absent, so neither the preview nor the grid can ever point at a hidden programme.
+  const visibleIds = new Set(visibleChannels.map((c) => c.id))
+  const shownId = (id: string | null) =>
+    id && visibleIds.has(programmeById.get(id)?.channelId ?? '') ? id : null
+  const gridSelectedId = shownId(selectedId)
+  const gridFocusedId = shownId(focusedId) ?? gridSelectedId
+  const focused = gridFocusedId ? programmeById.get(gridFocusedId) : undefined
+  const selected = gridSelectedId ? programmeById.get(gridSelectedId) : undefined
+  const hover = input === 'pointer' && zone !== 'details' && hovered && visibleIds.has(hovered.channelId) ? hovered : null
   const shown = hover ?? (zone === 'grid' ? focused : undefined) ?? selected ?? focused ?? null
   const shownChannel = shown ? channelById.get(shown.channelId) : undefined
 
@@ -207,6 +270,7 @@ export default function GuideScreen({
 
       {guide && guide.channels.length > 0 ? (
         <>
+          <CategoryFilters value={category} onChange={changeCategory} />
           <div className="details-slot">
             {shown && shownChannel && (
               <DetailsPanel
@@ -220,19 +284,20 @@ export default function GuideScreen({
           </div>
           <EpgGrid
             ref={gridRef}
-            guide={guide}
+            guide={orderedGuide ?? guide}
             now={now}
-            focusedId={focusedId}
-            selectedId={selectedId}
+            focusedId={gridFocusedId}
+            selectedId={gridSelectedId}
             onFocusProgramme={focusProgramme}
             onSelect={select}
             onHover={setHovered}
             onOpen={activateFromGrid}
             onConfirm={confirm}
             onExitUp={focusAction}
+            onReorder={reorderVisible}
           />
           <footer className="guide-footer">
-            Schedules are demo data. Only {guide.channels[0].name} has a real stream.
+            Schedules are demo data. Only {REAL_CHANNEL.name} has a real stream.
           </footer>
           {dialog && (
             <ProgrammeDialog
