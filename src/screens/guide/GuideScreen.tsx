@@ -111,10 +111,12 @@ export default function GuideScreen({
     }
   }, [])
 
-  // The preview card's primary action. Only what can really play opens the player; the
-  // rest explains itself here, without leaving the guide.
+  // A programme's primary action, from the preview card's button or a click on the
+  // programme. Only what can really play opens the player; the rest explains itself here.
+  // With a reminder already set, the button removes it while a click on the programme
+  // reopens its settings, so a click never deletes anything.
   const activate = useCallback(
-    (p: Programme) => {
+    (p: Programme, from: 'button' | 'grid') => {
       const channel = channelById.get(p.channelId)
       if (!channel) return
       const t = Date.now()
@@ -122,15 +124,23 @@ export default function GuideScreen({
         dialogReturn.current = document.activeElement as HTMLElement | null
         setDialog({ kind, programme: p, channel })
       }
-      if (phaseOf(p, t) === 'upcoming') show(reminders.has(p.id) ? 'remove-reminder' : 'reminder')
+      if (phaseOf(p, t) === 'upcoming') show(from === 'button' && reminders.has(p.id) ? 'remove-reminder' : 'reminder')
       else if (!channel.streamUrl) show('no-stream')
       else if (availabilityOf(p, channel, t) === 'no-recording') show('no-recording')
       else onOpen({ channel, programme: p })
     },
     [channelById, reminders, onOpen],
   )
+  const activateFromGrid = useCallback((p: Programme) => activate(p, 'grid'), [activate])
+  const confirm = useCallback(
+    (p: Programme) => {
+      select(p)
+      focusAction()
+    },
+    [select],
+  )
 
-  // Back to whatever opened the dialog (the preview card's button).
+  // Back to whatever opened the dialog: the preview card's button or the programme.
   const closeDialog = useCallback(() => {
     setDialog(null)
     const el = dialogReturn.current
@@ -207,7 +217,7 @@ export default function GuideScreen({
                 channel={shownChannel}
                 now={now}
                 hasReminder={reminders.has(shown.id)}
-                onActivate={() => activate(shown)}
+                onActivate={() => activate(shown, 'button')}
               />
             )}
           </div>
@@ -220,6 +230,8 @@ export default function GuideScreen({
             onFocusProgramme={focusProgramme}
             onSelect={select}
             onHover={setHovered}
+            onOpen={activateFromGrid}
+            onConfirm={confirm}
             onExitUp={focusAction}
           />
           <footer className="guide-footer">

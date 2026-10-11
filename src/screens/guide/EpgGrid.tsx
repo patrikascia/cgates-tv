@@ -21,6 +21,10 @@ interface Props {
   onFocusProgramme: (p: Programme) => void
   onSelect: (p: Programme) => void
   onHover: (p: Programme | null) => void
+  /** Mouse click: run the programme's action (play, explain or set up a reminder). */
+  onOpen: (p: Programme) => void
+  /** Enter / OK: confirm the programme and move on to the preview card's action button. */
+  onConfirm: (p: Programme) => void
   onExitUp: () => void
 }
 
@@ -38,6 +42,8 @@ export default function EpgGrid({
   onFocusProgramme,
   onSelect,
   onHover,
+  onOpen,
+  onConfirm,
   onExitUp,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -150,13 +156,15 @@ export default function EpgGrid({
     }
   }, [geometry, index, rows, focusedId, selectedId, currentOnRow, focusProgramme])
 
-  // Programme blocks only ever select. Their action is run from the preview card's
-  // button, so a click (or a double-click) on a programme never starts playback.
+  // Mouse: a click selects the programme and runs its action straight away.
   const onCellClick = (e: MouseEvent<HTMLButtonElement>, p: Programme) => {
-    if (e.detail === 0) return // keyboard "clicks" are handled in onKeyDown
+    // Keyboard "clicks" are handled in onKeyDown. The second click of a double-click
+    // must not run the action again.
+    if (e.detail !== 1) return
     onSelect(p)
     focusProgramme(p)
     anchor.current = Math.max(p.start, Math.min(timeAtViewLeft(), p.end - MIN))
+    onOpen(p)
   }
 
   const onScroll = () => {
@@ -172,10 +180,11 @@ export default function EpgGrid({
     switch (e.key) {
       case 'Enter':
       case ' ': {
-        // Enter confirms the selection and keeps focus here. The action is reached by
-        // moving to the preview card's button (Up from the first channel, or Shift+Tab).
+        // Enter confirms the programme and moves focus to the preview card's action
+        // button; Enter or Space there runs it. preventDefault stops the native click,
+        // so the programme itself never runs an action from the keyboard.
         e.preventDefault()
-        if (!e.repeat) onSelect(rows[pos.row][pos.col])
+        if (!e.repeat) onConfirm(rows[pos.row][pos.col])
         return
       }
       case 'ArrowRight':

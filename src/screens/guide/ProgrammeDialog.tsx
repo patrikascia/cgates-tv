@@ -146,9 +146,10 @@ export default function ProgrammeDialog({
     }
   }
 
-  // Clicks on the backdrop land on the <dialog> element itself.
+  // Clicks on the backdrop land on the <dialog> element itself. Only a single click
+  // closes: the second click of a double-click on a programme lands here too.
   const onClick = (e: MouseEvent<HTMLDialogElement>) => {
-    if (e.target === e.currentTarget) close()
+    if (e.target === e.currentTarget && e.detail === 1) close()
   }
 
   const at = `${dayPhrase(p.start, now)} at ${formatTime(p.start)} on ${channel.name}`

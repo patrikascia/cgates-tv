@@ -299,7 +299,8 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
       onPointerMove={chrome.poke}
       onPointerDown={chrome.poke}
     >
-      <video ref={videoRef} className="player-video" playsInline onClick={togglePlay} />
+      {/* detail check: the second click of the double-click that opened the player lands here */}
+      <video ref={videoRef} className="player-video" playsInline onClick={(e) => e.detail === 1 && togglePlay()} />
 
       <div className="player-scrim" aria-hidden="true" />
 
