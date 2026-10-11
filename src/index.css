@@ -66,13 +66,13 @@ kbd {
   border: 2px solid transparent;
 }
 /* Buttons stay dark in every state except while pressed:
-   rest = neutral border, hover = green border, keyboard focus = green border plus the
-   focus ring, pressed = green fill with dark text. */
+   rest = neutral border, hover and keyboard focus = the same single green border,
+   pressed = green fill with dark text. */
 .btn-primary { background: var(--surface-3); border-color: #6e737b; color: var(--text); }
 .btn-secondary { background: rgb(255 255 255 / 0.05); border-color: var(--line-2); }
 .btn-ghost { background: transparent; color: var(--text-2); padding: 0 1rem 0 0.75rem; }
 .btn:hover { border-color: var(--brand); color: var(--text); }
-.btn:focus-visible { border-color: var(--brand); color: var(--text); box-shadow: var(--focus-ring); }
+.btn:focus-visible { border-color: var(--brand); color: var(--text); }
 .btn:active,
 .btn.is-pressed { background: var(--brand); border-color: var(--brand); color: var(--focus-text); }
 

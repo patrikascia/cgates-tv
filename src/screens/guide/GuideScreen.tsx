@@ -21,6 +21,8 @@ interface Props {
   onSelectionChange: (id: string) => void
   /** Reminder delivery methods by programme id. */
   reminders: ReadonlyMap<string, ReminderMethods>
+  /** Delivery methods pre-selected for a new reminder: the last ones saved, else Email. */
+  preferredMethods: ReminderMethods
   onReminderSaved: (programmeId: string, methods: ReminderMethods) => void
   onReminderRemoved: (programmeId: string) => void
   onOpen: (selection: Selection) => void
@@ -46,6 +48,7 @@ export default function GuideScreen({
   initialSelectedId,
   onSelectionChange,
   reminders,
+  preferredMethods,
   onReminderSaved,
   onReminderRemoved,
   onOpen,
@@ -244,6 +247,7 @@ export default function GuideScreen({
               programme={dialog.programme}
               channel={dialog.channel}
               reminder={reminders.get(dialog.programme.id) ?? null}
+              preferredMethods={preferredMethods}
               onReminderSaved={onReminderSaved}
               onReminderRemoved={onReminderRemoved}
               onWatchLive={onWatchLive}

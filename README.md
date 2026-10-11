@@ -46,7 +46,7 @@ src/
 
 Mouse: hovering previews a programme and never runs anything. A click selects the programme and runs its action: on now = live playback, already aired = the recording or the unavailable state, not started = reminder setup (for a programme with a reminder, its settings; removing is done with the action button). A double-click runs it only once. While the keyboard is in use, a resting mouse pointer is ignored.
 
-States: hover = thin green outline, keyboard focus = green outline, selection = green block. Buttons stay dark: grey border at rest, green border on hover, green border plus ring on keyboard focus (a single green border inside dialogs), green fill only while pressed. The CGates green is `#21b14b`.
+States: hover = thin green outline, keyboard focus = green outline, selection = green block. Buttons stay dark: grey border at rest, green border on hover, the same single green border on hover and keyboard focus (also for every player control), green fill only while pressed. New reminders start with the delivery methods saved last time (Email if none yet), kept in memory while the app runs. The CGates green is `#21b14b`.
 
 **Player**
 

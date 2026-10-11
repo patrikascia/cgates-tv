@@ -5,7 +5,6 @@ import { REAL_CHANNEL } from '../../data/channels'
 import type { Channel } from '../../data/channels'
 import type { Programme } from '../../data/epg'
 import {
-  DEFAULT_METHODS,
   NOTIFICATIONS_DISCLAIMER,
   methodsLabel,
   removeReminder,
@@ -27,6 +26,8 @@ interface Props {
   channel: Channel
   /** The programme's current reminder, if any. */
   reminder: ReminderMethods | null
+  /** Pre-selected methods for a new reminder. */
+  preferredMethods: ReminderMethods
   onReminderSaved: (programmeId: string, methods: ReminderMethods) => void
   onReminderRemoved: (programmeId: string) => void
   onWatchLive: () => void
@@ -50,6 +51,7 @@ export default function ProgrammeDialog({
   programme: p,
   channel,
   reminder,
+  preferredMethods,
   onReminderSaved,
   onReminderRemoved,
   onWatchLive,
@@ -58,8 +60,9 @@ export default function ProgrammeDialog({
   const ref = useRef<HTMLDialogElement>(null)
   const [now] = useState(() => Date.now())
   const [stage, setStage] = useState<Stage>(() => initialStage(kind))
-  // Reopening an existing reminder keeps its methods; a new one starts with Email.
-  const [methods, setMethods] = useState<ReminderMethods>(reminder ?? DEFAULT_METHODS)
+  // Reopening an existing reminder keeps its methods; a new one starts with the methods
+  // saved last time (Email if none yet).
+  const [methods, setMethods] = useState<ReminderMethods>(reminder ?? preferredMethods)
   const [failed, setFailed] = useState(false)
   const noMethod = !methods.email && !methods.sms
 
@@ -113,7 +116,7 @@ export default function ProgrammeDialog({
   }
 
   const setUpAgain = () => {
-    setMethods(DEFAULT_METHODS)
+    setMethods(preferredMethods)
     setFailed(false)
     setStage('setup')
   }

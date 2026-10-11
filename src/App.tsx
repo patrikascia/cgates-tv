@@ -3,6 +3,7 @@ import { REAL_CHANNEL } from './data/channels'
 import type { Channel } from './data/channels'
 import { fetchGuide } from './data/epg'
 import type { Guide, Programme } from './data/epg'
+import { DEFAULT_METHODS } from './data/reminders'
 import type { ReminderMethods } from './data/reminders'
 import GuideScreen from './screens/guide/GuideScreen'
 import PlayerScreen from './screens/player/PlayerScreen'
@@ -24,10 +25,12 @@ export default function App() {
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null)
   // Reminder delivery methods by programme id. Prototype: kept in memory only, see data/reminders.ts.
   const [reminders, setReminders] = useState<ReadonlyMap<string, ReminderMethods>>(() => new Map())
-  const saveReminder = useCallback(
-    (id: string, methods: ReminderMethods) => setReminders((prev) => new Map(prev).set(id, methods)),
-    [],
-  )
+  // The last saved delivery methods become the default for the next new reminder.
+  const [preferredMethods, setPreferredMethods] = useState<ReminderMethods>(DEFAULT_METHODS)
+  const saveReminder = useCallback((id: string, methods: ReminderMethods) => {
+    setReminders((prev) => new Map(prev).set(id, methods))
+    setPreferredMethods(methods)
+  }, [])
   const removeReminder = useCallback(
     (id: string) =>
       setReminders((prev) => {
@@ -89,6 +92,7 @@ export default function App() {
       initialSelectedId={lastSelectedId}
       onSelectionChange={setLastSelectedId}
       reminders={reminders}
+      preferredMethods={preferredMethods}
       onReminderSaved={saveReminder}
       onReminderRemoved={removeReminder}
       onOpen={openPlayer}

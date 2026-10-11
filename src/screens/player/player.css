@@ -83,15 +83,16 @@
   width: 3rem;
   height: 3rem;
   border-radius: 50%;
+  border: 2px solid transparent;
   color: var(--text);
   flex: none;
 }
 .ctl-primary { width: 3.5rem; height: 3.5rem; }
 .ctl-text { display: inline-flex; align-items: center; gap: 0.5rem; width: auto; padding: 0 1rem; border-radius: 999px; font-size: 0.9375rem; font-weight: 600; }
-.ctl:hover { background: rgb(255 255 255 / 0.12); }
-.ctl:disabled { color: var(--text-3); background: none; }
+.ctl:hover,
+.ctl:focus-visible { border-color: var(--brand); }
+.ctl:disabled { color: var(--text-3); background: none; border-color: transparent; }
 .ctl:disabled .status-dot { background: var(--text-3); }
-.ctl:focus-visible { background: var(--focus-bg); color: var(--focus-text); }
 
 .time-readout { display: flex; align-items: baseline; gap: 0.625rem; margin-left: 1rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .time-readout strong { font-size: 1.0625rem; font-weight: 600; }
@@ -104,6 +105,7 @@
   height: 3rem;
   padding: 0 0.5rem;
   background: transparent;
+  border: 2px solid transparent;
   border-radius: 999px;
   cursor: pointer;
 }
@@ -123,8 +125,8 @@
 .volume::-moz-range-track { height: var(--track); border-radius: 2px; background: rgb(255 255 255 / 0.22); }
 .volume::-moz-range-progress { height: var(--track); border-radius: 2px; background: var(--text); }
 .volume::-moz-range-thumb { width: 0.875rem; height: 0.875rem; border: 0; border-radius: 50%; background: var(--text); }
-.volume:focus-visible { background: rgb(255 255 255 / 0.14); }
-.volume:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgb(255 255 255 / 0.35); }
+.volume:hover,
+.volume:focus-visible { border-color: var(--brand); }
 
 /* ---- Scrubber -------------------------------------------------------------------- */
 .scrubber { display: flex; align-items: center; gap: 1rem; font-variant-numeric: tabular-nums; }
@@ -138,9 +140,14 @@
   height: 2.25rem;
   display: flex;
   align-items: center;
+  border-radius: 999px;
   cursor: pointer;
   touch-action: none;
 }
+/* An outline (not a border) so the track keeps its full width. */
+.scrubber-hit:hover,
+.scrubber-hit:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.is-disabled .scrubber-hit:hover { outline: none; }
 .scrubber-track {
   position: relative;
   width: 100%;
@@ -168,7 +175,7 @@
 }
 .scrubber-hit:hover .scrubber-knob,
 [data-scrubbing] .scrubber-knob { transform: scale(1); }
-.scrubber-hit:focus-visible .scrubber-knob { transform: scale(1.1); box-shadow: 0 0 0 5px rgb(255 255 255 / 0.3); }
+.scrubber-hit:focus-visible .scrubber-knob { transform: scale(1.1); }
 .is-disabled .scrubber-hit { cursor: default; }
 .is-disabled .scrubber-knob { display: none; }
 
