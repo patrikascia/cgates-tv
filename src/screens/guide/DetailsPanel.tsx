@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
 import ChannelLogo from '../../components/ChannelLogo'
 import Icon from '../../components/Icon'
 import type { Channel } from '../../data/channels'
 import { availabilityOf, phaseOf } from '../../data/epg'
 import type { Programme } from '../../data/epg'
 import { formatDay, formatDuration, formatRange } from '../../lib/time'
+import { mouseOnly } from '../../lib/mouseOnly'
 import { useMutedPreview } from '../../player/previewPlayers'
 
 interface Props {
@@ -47,13 +47,6 @@ export default function DetailsPanel({ programme: p, channel, now, hasReminder, 
   const videoRef = useRef<HTMLVideoElement>(null)
   const previewStatus = useMutedPreview(videoRef, previewUrl)
   const wantsPreview = avail === 'live'
-
-  // Green "pressed" fill while Enter / Space is held. :active covers the mouse; Enter
-  // never sets :active. Cleared on key up and blur, so it never sticks.
-  const [pressed, setPressed] = useState(false)
-  const onActionKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
-    if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) setPressed(true)
-  }
 
   const actionLabel = upcoming
     ? hasReminder
@@ -121,27 +114,22 @@ export default function DetailsPanel({ programme: p, channel, now, hasReminder, 
         <div className="details-actions">
           <button
             type="button"
-            data-nav="details"
-            className={`btn btn-primary action-btn${pressed ? ' is-pressed' : ''}`}
-            onClick={onActivate}
-            onKeyDown={onActionKeyDown}
-            onKeyUp={() => setPressed(false)}
-            onBlur={() => setPressed(false)}
+            tabIndex={-1}
+            className="btn btn-primary action-btn"
+            onClick={mouseOnly(onActivate)}
           >
             <Icon name={upcoming ? (hasReminder ? 'bellOff' : 'bell') : 'play'} />
             {actionLabel}
           </button>
-          {/* Reached with Right from the primary button (not with Tab), or clicked. */}
           <button
             type="button"
-            data-nav="details-recs"
             tabIndex={-1}
-            className="btn btn-primary"
+            className="btn btn-primary recs-btn"
             aria-haspopup="dialog"
-            onClick={onRecommendations}
+            onClick={mouseOnly(onRecommendations)}
           >
             <Icon name="sparkles" />
-            Recommendations
+            Similar to this
           </button>
         </div>
       </div>

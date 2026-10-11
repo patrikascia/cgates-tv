@@ -68,8 +68,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
-  const openPlayer = useCallback((selection: Selection) => {
-    if (selection.programme) setLastSelectedId(selection.programme.id)
+  // keepSelection: play without making it the guide's selection (e.g. from the
+  // "Recommended to you" panel), so the guide is unchanged on return.
+  const openPlayer = useCallback((selection: Selection, options?: { keepSelection?: boolean }) => {
+    if (selection.programme && !options?.keepSelection) setLastSelectedId(selection.programme.id)
     setScreen({ name: 'player', selection })
   }, [])
 

@@ -1,10 +1,6 @@
 import { formatDate, formatTime, useNow } from '../lib/time'
 
-interface Props {
-  onGuide: () => void
-}
-
-export default function AppHeader({ onGuide }: Props) {
+export default function AppHeader() {
   const now = useNow(5_000)
   return (
     <header className="app-header">
@@ -15,15 +11,10 @@ export default function AppHeader({ onGuide }: Props) {
       </div>
 
       <nav className="app-nav" aria-label="Main">
-        <button
-          type="button"
-          data-nav="header"
-          className="nav-item"
-          aria-current="page"
-          onClick={onGuide}
-        >
+        {/* The current (and only) page: an indicator, not a control. */}
+        <span className="nav-item" aria-current="page">
           Guide
-        </button>
+        </span>
       </nav>
 
       <div className="app-header-end">

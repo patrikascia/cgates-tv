@@ -1,27 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { GuideLoad, Selection } from '../../App'
 import AppHeader from '../../components/AppHeader'
 import Icon from '../../components/Icon'
-import { REAL_CHANNEL } from '../../data/channels'
 import type { Channel } from '../../data/channels'
 import { availabilityOf, phaseOf, programmeAt } from '../../data/epg'
 import type { Programme } from '../../data/epg'
 import type { ReminderMethods } from '../../data/reminders'
+import { mouseOnly } from '../../lib/mouseOnly'
 import { useNow } from '../../lib/time'
 import CategoryFilters from './CategoryFilters'
 import type { CategoryFilter } from './CategoryFilters'
 import { useChannelOrders } from './channelOrder'
 import DetailsPanel from './DetailsPanel'
 import EpgGrid from './EpgGrid'
-import type { EpgGridHandle } from './EpgGrid'
 import ProgrammeDialog from './ProgrammeDialog'
 import RecommendationsDialog from './RecommendationsDialog'
+import ProgrammePanel from './ProgrammePanel'
+import { pickPopular, pickRecommended } from './recommended'
+import type { Recommended } from './recommended'
 import type { DialogKind } from './ProgrammeDialog'
 import './guide.css'
 
 interface Props {
   load: GuideLoad
-  /** Programme to select and focus on arrival, e.g. the one just watched. */
+  /** Programme to select on arrival, e.g. the one just watched. */
   initialSelectedId: string | null
   onSelectionChange: (id: string) => void
   category: CategoryFilter
@@ -32,37 +34,12 @@ interface Props {
   preferredMethods: ReminderMethods
   onReminderSaved: (programmeId: string, methods: ReminderMethods) => void
   onReminderRemoved: (programmeId: string) => void
-  onOpen: (selection: Selection) => void
+  onOpen: (selection: Selection, options?: { keepSelection?: boolean }) => void
   onWatchLive: () => void
   onRetry: () => void
 }
 
 type Dialog = { kind: DialogKind; programme: Programme; channel: Channel }
-
-const navItems = (group: string) =>
-  Array.from(document.querySelectorAll<HTMLElement>(`[data-nav="${group}"]:not(:disabled)`))
-
-// Arrow keys run one vertical path: header -> category filters -> preview card action ->
-// programme grid.
-const focusAction = () => {
-  const el = navItems('details')[0] ?? navItems('header')[0]
-  el?.focus()
-}
-// The preview card's row: [primary action] [Recommendations]. Recommendations is reached
-// only from the primary action (Right).
-const actionRow = (nav: 'details' | 'details-recs') =>
-  document.querySelector<HTMLElement>(`[data-nav="${nav}"]`)
-
-// Entering the filter row lands on the active category.
-const focusFilters = () => {
-  const el =
-    document.querySelector<HTMLElement>('[data-nav="filters"][aria-pressed="true"]') ??
-    navItems('filters')[0] ??
-    navItems('details')[0]
-  el?.focus()
-}
-
-type Zone = 'grid' | 'details' | 'other'
 
 const NO_CHANNELS: Channel[] = []
 
@@ -81,23 +58,18 @@ export default function GuideScreen({
   onRetry,
 }: Props) {
   const now = useNow(15_000)
-  const gridRef = useRef<EpgGridHandle>(null)
-  // Three separate targets: keyboard focus, mouse hover and the confirmed selection.
-  const [focusedId, setFocusedId] = useState<string | null>(initialSelectedId)
+  // The guide is mouse-only: hover previews a programme, a click selects it, and a click
+  // on the selected programme runs its action.
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId)
   const [hovered, setHovered] = useState<Programme | null>(null)
-  // Which input the user is using right now, and where focus is. Together they decide
-  // which programme the preview card shows.
-  const [input, setInput] = useState<'keyboard' | 'pointer'>('keyboard')
-  const [zone, setZone] = useState<Zone>('grid')
   const [dialog, setDialog] = useState<Dialog | null>(null)
   // Recommendations popup (mock picks) and the card chosen in it.
   const [recsOpen, setRecsOpen] = useState(false)
   const [pickedRec, setPickedRec] = useState<number | null>(null)
-  const dialogOpen = dialog !== null || recsOpen
+  // Side panels with mock picks from the guide: "Recommended to you" and "Popular now".
+  const [panel, setPanel] = useState<'recommended' | 'popular' | null>(null)
 
   const guide = load.state === 'ready' ? load.guide : null
-  // The user's own channel order (drag and drop), saved in this browser.
   // All and each category have their own saved channel order (drag and drop).
   const { channelsFor, moveChannel } = useChannelOrders(guide?.channels ?? NO_CHANNELS)
   const visibleChannels = useMemo(() => channelsFor(category), [channelsFor, category])
@@ -109,7 +81,6 @@ export default function GuideScreen({
     [guide],
   )
 
-  const focusProgramme = useCallback((p: Programme) => setFocusedId(p.id), [])
   const select = useCallback(
     (p: Programme) => {
       setSelectedId(p.id)
@@ -118,64 +89,37 @@ export default function GuideScreen({
     [onSelectionChange],
   )
 
+  // What is on now on the first visible channel (or its first programme).
+  const firstVisible = useCallback(
+    (channels: Channel[]) => {
+      const list = guide && channels[0] ? guide.programmes[channels[0].id] : undefined
+      return programmeAt(list, Date.now()) ?? list?.[0]
+    },
+    [guide],
+  )
+
   // A category change that hides the selection selects what is on now on the first
-  // visible channel (and makes it the grid's focus target); a hidden focus target moves to
-  // the selection. Keyboard focus itself stays on the filter pill.
+  // visible channel instead.
   const changeCategory = useCallback(
     (next: CategoryFilter) => {
       onCategoryChange(next)
-      if (!guide) return
+      if (!selectedId) return
       const visible = channelsFor(next)
-      const shown = new Set(visible.map((c) => c.id))
-      const onScreen = (id: string | null) => !!id && shown.has(programmeById.get(id)?.channelId ?? '')
-      const list = visible[0] ? guide.programmes[visible[0].id] : undefined
-      const first = programmeAt(list, Date.now()) ?? list?.[0]
-      if (!first) return
-      if (selectedId && !onScreen(selectedId)) {
-        select(first)
-        setFocusedId(first.id)
-      } else if (!onScreen(focusedId)) {
-        setFocusedId(selectedId ?? first.id)
-      }
+      const channelId = programmeById.get(selectedId)?.channelId
+      if (visible.some((c) => c.id === channelId)) return
+      const first = firstVisible(visible)
+      if (first) select(first)
     },
-    [onCategoryChange, guide, channelsFor, programmeById, selectedId, focusedId, select],
+    [onCategoryChange, selectedId, channelsFor, programmeById, firstVisible, select],
   )
 
-  useEffect(() => {
-    const onKey = () => setInput('keyboard')
-    // Only real pointer movement counts: browsers also send pointer events when the
-    // grid scrolls under a resting cursor, which must not take over from the keyboard.
-    let lastX = NaN
-    let lastY = NaN
-    const onMove = (e: PointerEvent) => {
-      if (e.clientX === lastX && e.clientY === lastY) return
-      lastX = e.clientX
-      lastY = e.clientY
-      setInput('pointer')
-    }
-    const onDown = () => setInput('pointer')
-    const onFocusIn = (e: FocusEvent) => {
-      const t = e.target as HTMLElement
-      setZone(t.dataset?.id ? 'grid' : t.dataset?.nav?.startsWith('details') ? 'details' : 'other')
-    }
-    window.addEventListener('keydown', onKey, true)
-    window.addEventListener('pointermove', onMove, true)
-    window.addEventListener('pointerdown', onDown, true)
-    document.addEventListener('focusin', onFocusIn)
-    return () => {
-      window.removeEventListener('keydown', onKey, true)
-      window.removeEventListener('pointermove', onMove, true)
-      window.removeEventListener('pointerdown', onDown, true)
-      document.removeEventListener('focusin', onFocusIn)
-    }
-  }, [])
-
-  // A programme's primary action, from the preview card's button or a click on the
-  // programme. Only what can really play opens the player; the rest explains itself here.
-  // With a reminder already set, the button removes it while a click on the programme
-  // reopens its settings, so a click never deletes anything.
+  // A programme's primary action, from the preview card's button, a click on the selected
+  // programme, or the "Recommended to you" panel. Only what can really play opens the
+  // player; the rest explains itself here. With a reminder already set, the button removes
+  // it while a click on the programme reopens its settings, so a click never deletes
+  // anything. From the panel, playing does not change the guide's selection.
   const activate = useCallback(
-    (p: Programme, from: 'button' | 'grid') => {
+    (p: Programme, from: 'button' | 'grid' | 'panel') => {
       const channel = channelById.get(p.channelId)
       if (!channel) return
       const t = Date.now()
@@ -183,114 +127,62 @@ export default function GuideScreen({
       if (phaseOf(p, t) === 'upcoming') show(from === 'button' && reminders.has(p.id) ? 'remove-reminder' : 'reminder')
       else if (!channel.streamUrl) show('no-stream')
       else if (availabilityOf(p, channel, t) === 'no-recording') show('no-recording')
-      else onOpen({ channel, programme: p })
+      else onOpen({ channel, programme: p }, { keepSelection: from === 'panel' })
     },
     [channelById, reminders, onOpen],
   )
   const activateFromGrid = useCallback((p: Programme) => activate(p, 'grid'), [activate])
-  const confirm = useCallback(
-    (p: Programme) => {
-      select(p)
-      focusAction()
-    },
-    [select],
-  )
 
-  // Closing a dialog returns focus to its programme in the grid (the selected one), which
-  // also keeps that programme in the preview card.
-  const closeDialog = useCallback((p: Programme) => {
-    setDialog(null)
-    gridRef.current?.focus(p.id)
-  }, [])
+  // Panel picks: on now or already aired, never upcoming (see recommended.ts). Recomputed
+  // with the guide clock. A chosen title does exactly what its EPG button ("Watch now" /
+  // "Watch recording") does, without changing the guide's selection, category or order.
+  const recommended = useMemo(() => (guide ? pickRecommended(guide, now) : []), [guide, now])
+  const popular = useMemo(() => (guide ? pickPopular(guide, now) : []), [guide, now])
+  const choosePanelItem = useCallback((item: Recommended) => activate(item.programme, 'panel'), [activate])
 
-  // Arrow keys outside the grid: header row <-> details actions <-> grid.
-  // An open dialog handles its own keys.
-  useEffect(() => {
-    if (dialogOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      // Already handled, e.g. by the grid, which may have just moved focus out of itself.
-      if (e.defaultPrevented) return
-      // Modified keys are not navigation here (Alt+Left is the browser's Back; Alt+Up/Down
-      // only reorders channels inside the grid). Browsers also do not show :focus-visible
-      // for focus moved by them.
-      if (e.altKey || e.ctrlKey || e.metaKey) return
-      const active = document.activeElement as HTMLElement | null
-      const group = active?.dataset.nav
-      if (active?.dataset.id) return // grid cells handle their own keys
-
-      if (!group) {
-        // Focus is nowhere useful (e.g. after a click on empty space): any navigation key
-        // brings it back to the grid.
-        if (e.key.startsWith('Arrow') || e.key.startsWith('Page')) {
-          e.preventDefault()
-          if (gridRef.current) gridRef.current.focus()
-          else navItems('header')[0]?.focus()
-        }
-        return
-      }
-      // The preview card's controls: Up = active category, Down = the selected programme,
-      // Left/Right only within [primary action] [Recommendations].
-      if (group.startsWith('details') && e.key.startsWith('Arrow')) {
-        e.preventDefault()
-        if (e.key === 'ArrowUp') focusFilters()
-        else if (e.key === 'ArrowDown')
-          gridRef.current?.focus(document.querySelector<HTMLElement>('.cell.is-selected')?.dataset.id)
-        else if (group === 'details' && e.key === 'ArrowRight') actionRow('details-recs')?.focus()
-        else if (group === 'details-recs' && e.key === 'ArrowLeft') actionRow('details')?.focus()
-        return
-      }
-      const list = navItems(group)
-      const i = list.indexOf(active!)
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        e.preventDefault()
-        list[Math.min(list.length - 1, Math.max(0, i + (e.key === 'ArrowRight' ? 1 : -1)))]?.focus()
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        if (group === 'header' && !gridRef.current) navItems('state')[0]?.focus()
-        else if (group === 'header') focusFilters()
-        else if (group === 'filters') focusAction()
-        else gridRef.current?.focus()
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        if (group === 'details') focusFilters()
-        else if (group !== 'header') navItems('header')[0]?.focus()
-      } else if (e.key === 'Escape' || e.key === 'Backspace') {
-        e.preventDefault()
-        gridRef.current?.focus()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [dialogOpen])
-
-  // Without a grid (loading / error / empty) start focus in the header.
-  useEffect(() => {
-    if (load.state === 'error') navItems('state')[0]?.focus()
-  }, [load.state])
-
-  // The preview card shows, in order: the hovered programme (only while the mouse is in
-  // use and the card's own button is not focused), the keyboard-focused programme while
-  // focus is in the grid, then the confirmed selection. Its button always acts on it.
-  // Guard: a selection or focus target on a channel that is not shown is treated as
-  // absent, so neither the preview nor the grid can ever point at a hidden programme.
+  // The preview card shows the hovered programme, else the selection, else what is on now
+  // on the first visible channel. Its button always acts on the programme it shows. A
+  // selection or hover on a channel that is not shown counts as absent.
   const visibleIds = new Set(visibleChannels.map((c) => c.id))
-  const shownId = (id: string | null) =>
-    id && visibleIds.has(programmeById.get(id)?.channelId ?? '') ? id : null
-  const gridSelectedId = shownId(selectedId)
-  const gridFocusedId = shownId(focusedId) ?? gridSelectedId
-  const focused = gridFocusedId ? programmeById.get(gridFocusedId) : undefined
-  const selected = gridSelectedId ? programmeById.get(gridSelectedId) : undefined
-  const hover = input === 'pointer' && zone !== 'details' && hovered && visibleIds.has(hovered.channelId) ? hovered : null
-  const shown = hover ?? (zone === 'grid' ? focused : undefined) ?? selected ?? focused ?? null
+  const onScreen = (p: Programme | undefined | null) => (p && visibleIds.has(p.channelId) ? p : null)
+  const selected = onScreen(selectedId ? programmeById.get(selectedId) : undefined)
+  const shown = onScreen(hovered) ?? selected ?? firstVisible(visibleChannels) ?? null
   const shownChannel = shown ? channelById.get(shown.channelId) : undefined
 
   return (
-    <div className="guide-screen" data-input={input}>
-      <AppHeader onGuide={() => gridRef.current?.focus()} />
+    <div className="guide-screen">
+      <AppHeader />
 
       {guide && guide.channels.length > 0 ? (
         <>
-          <CategoryFilters value={category} onChange={changeCategory} />
+          <CategoryFilters
+            value={category}
+            onChange={changeCategory}
+            end={
+              <div className="filter-actions">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className="btn btn-primary panel-btn popular-btn"
+                  aria-haspopup="dialog"
+                  onClick={mouseOnly(() => setPanel('popular'))}
+                >
+                  <Icon name="trending" />
+                  Popular now
+                </button>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className="btn btn-primary panel-btn recommended-btn"
+                  aria-haspopup="dialog"
+                  onClick={mouseOnly(() => setPanel('recommended'))}
+                >
+                  <Icon name="star" />
+                  Recommended to you
+                </button>
+              </div>
+            }
+          />
           <div className="details-slot">
             {shown && shownChannel && (
               <DetailsPanel
@@ -304,30 +196,42 @@ export default function GuideScreen({
             )}
           </div>
           <EpgGrid
-            ref={gridRef}
             guide={orderedGuide ?? guide}
             now={now}
-            focusedId={gridFocusedId}
-            selectedId={gridSelectedId}
-            onFocusProgramme={focusProgramme}
+            selectedId={selected?.id ?? null}
             onSelect={select}
             onHover={setHovered}
             onOpen={activateFromGrid}
-            onConfirm={confirm}
-            onExitUp={focusAction}
             onReorder={reorderVisible}
           />
-          <footer className="guide-footer">
-            Schedules are demo data. Only {REAL_CHANNEL.name} has a real stream.
-          </footer>
+          {panel === 'recommended' && (
+            <ProgrammePanel
+              title="Recommended to you"
+              icon="star"
+              note="Demo picks from the guide — not personalised."
+              items={recommended}
+              now={now}
+              onChoose={choosePanelItem}
+              onClose={() => setPanel(null)}
+            />
+          )}
+          {panel === 'popular' && (
+            <ProgrammePanel
+              title="Popular now"
+              icon="trending"
+              note="Mock ranking — not based on real viewing figures."
+              items={popular}
+              now={now}
+              ranked
+              onChoose={choosePanelItem}
+              onClose={() => setPanel(null)}
+            />
+          )}
           {recsOpen && (
             <RecommendationsDialog
               picked={pickedRec}
               onPick={setPickedRec}
-              onClose={() => {
-                setRecsOpen(false)
-                actionRow('details-recs')?.focus()
-              }}
+              onClose={() => setRecsOpen(false)}
             />
           )}
           {dialog && (
@@ -341,7 +245,7 @@ export default function GuideScreen({
               onReminderSaved={onReminderSaved}
               onReminderRemoved={onReminderRemoved}
               onWatchLive={onWatchLive}
-              onClose={() => closeDialog(dialog.programme)}
+              onClose={() => setDialog(null)}
             />
           )}
         </>
@@ -358,11 +262,11 @@ export default function GuideScreen({
               <p className="state-title">The guide could not be loaded</p>
               <p className="state-text">{load.message}</p>
               <div className="state-actions">
-                <button type="button" data-nav="state" className="btn btn-primary" onClick={onRetry}>
+                <button type="button" className="btn btn-primary" onClick={onRetry}>
                   <Icon name="retry" />
                   Try again
                 </button>
-                <button type="button" data-nav="state" className="btn btn-secondary" onClick={onWatchLive}>
+                <button type="button" className="btn btn-secondary" onClick={onWatchLive}>
                   <span className="status-dot" aria-hidden="true" />
                   Watch live TV
                 </button>
@@ -374,7 +278,7 @@ export default function GuideScreen({
               <p className="state-title">No programmes scheduled</p>
               <p className="state-text">There is nothing in the guide right now. Live TV is still available.</p>
               <div className="state-actions">
-                <button type="button" data-nav="state" className="btn btn-primary" onClick={onWatchLive}>
+                <button type="button" className="btn btn-primary" onClick={onWatchLive}>
                   <span className="status-dot" aria-hidden="true" />
                   Watch live TV
                 </button>

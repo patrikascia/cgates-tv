@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent, MouseEvent } from 'react'
+import type { MouseEvent } from 'react'
 import Icon from '../../components/Icon'
 import { REAL_CHANNEL } from '../../data/channels'
 import type { Channel } from '../../data/channels'
@@ -80,21 +80,12 @@ export default function ProgrammeDialog({
     )
   }, [kind, p, onReminderRemoved])
 
-  // Each stage puts focus on its most likely next action.
-  useEffect(() => {
-    const d = ref.current
-    ;(d?.querySelector<HTMLElement>('[data-initial]') ?? d?.querySelector<HTMLElement>('button'))?.focus()
-  }, [stage])
-
   // Closing goes through the native dialog so its `close` event is the single exit path.
   const close = () => ref.current?.close()
 
   const save = () => {
     if (stage === 'saving') return
-    if (noMethod) {
-      ref.current?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.focus()
-      return
-    }
+    if (noMethod) return // the inline message asks for a choice
     setStage('saving')
     setFailed(false)
     saveReminder(p, methods).then(
@@ -113,34 +104,6 @@ export default function ProgrammeDialog({
     setMethods(preferredMethods)
     setFailed(false)
     setStage('setup')
-  }
-
-  const onKeyDown = (e: KeyboardEvent<HTMLDialogElement>) => {
-    const target = e.target as HTMLElement
-    if (e.repeat && (e.key === 'Enter' || e.key === ' ')) return // see the guard in App
-    // Controls in reading order: checkboxes, then the action buttons.
-    const controls = Array.from(ref.current?.querySelectorAll<HTMLElement>('button, input') ?? [])
-    const i = controls.indexOf(target)
-    if (e.key === 'Backspace' || e.key === 'BrowserBack') {
-      e.preventDefault()
-      close()
-    } else if (e.key === 'Enter' && target instanceof HTMLInputElement && target.type === 'checkbox') {
-      // OK on a remote toggles the checkbox, like Space does.
-      e.preventDefault()
-      target.click()
-    } else if (e.key.startsWith('Arrow')) {
-      // TV remote: arrows move through the controls in reading order.
-      e.preventDefault()
-      const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1
-      controls[Math.min(controls.length - 1, Math.max(0, i + step))]?.focus()
-    } else if (e.key === 'Tab' && controls.length) {
-      // Tab cycles inside the dialog instead of escaping to the browser's own UI.
-      const atEdge = e.shiftKey ? i <= 0 : i === controls.length - 1
-      if (atEdge) {
-        e.preventDefault()
-        controls[e.shiftKey ? controls.length - 1 : 0].focus()
-      }
-    }
   }
 
   // Clicks on the backdrop land on the <dialog> element itself. Only a single click
@@ -199,11 +162,9 @@ export default function ProgrammeDialog({
       aria-labelledby="programme-dialog-title"
       aria-describedby={text ? 'programme-dialog-text' : undefined}
       onClose={onClose}
-      onKeyDown={onKeyDown}
       onClick={onClick}
     >
-      {/* Focusable so a click on plain text inside keeps focus in the dialog. */}
-      <div className="state-card state-card-wide dialog-card" tabIndex={-1}>
+      <div className="state-card state-card-wide dialog-card">
         <p className="state-eyebrow">
           {p.title} · {formatDay(p.start, now)}, {formatRange(p.start, p.end)} · {channel.name}
         </p>
@@ -247,7 +208,6 @@ export default function ProgrammeDialog({
             <button
               type="button"
               className="btn btn-primary"
-              data-initial
               onClick={save}
               aria-disabled={noMethod || stage === 'saving'}
             >
@@ -256,7 +216,7 @@ export default function ProgrammeDialog({
             </button>
           )}
           {stage === 'removed' && (
-            <button type="button" className="btn btn-primary" data-initial onClick={setUpAgain}>
+            <button type="button" className="btn btn-primary" onClick={setUpAgain}>
               <Icon name="bell" />
               Set reminder
             </button>
@@ -272,7 +232,6 @@ export default function ProgrammeDialog({
           <button
             type="button"
             className={`btn ${reminderFlow && stage !== 'saved' ? 'btn-ghost' : 'btn-secondary'}`}
-            data-initial={stage === 'saved' || stage === 'remove-failed' ? true : undefined}
             onClick={close}
           >
             <Icon name="guide" />

@@ -34,26 +34,22 @@ src/
 
 ## Keyboard / remote controls
 
-**Guide**
+**Guide (mouse-only)**
 
-- Arrows: move keyboard focus through programmes; the preview card follows the focused programme. Up/Down keep the same point in time across channels.
-- Page Up / Page Down: jump 5 channels.
-- Enter (or Space) on a programme selects it (green block) and moves focus to the preview card's action button (**Watch now** on air, **Watch recording** once aired, **Set reminder** / **Remove reminder** before it starts). Enter or Space there runs it, once, even if the key is held. Up from the first channel or Shift+Tab also reach the button.
-- From the action button: Right = **Recommendations** (next to it), Up = the active category, Down = the selected programme. Recommendations is reached only this way (or with the mouse), not with Tab. From Recommendations: Left = action button; Enter/Space opens the popup. The preview thumbnail is not interactive.
-- Recommendations popup: three mock picks (no personalisation service exists). Left/Right between cards, Enter/Space chooses one, Down = Close, Esc / Backspace closes and returns focus to Recommendations.
-- Anything that cannot play explains why in a dialog instead of opening the player. Removing a reminder is only possible from the action button.
-- In a dialog: focus starts on the main button; arrows or Tab / Shift+Tab move between the controls (Tab wraps around inside the dialog), Enter or Space toggles a checkbox, and Esc / Backspace closes it and returns focus to the button that opened it.
-- Esc / Backspace in the grid: return to what's on now.
-- Alt+Up / Alt+Down on a programme: move its channel one row up or down.
-- Returning from the player or closing any dialog puts focus back on the programme that was selected.
+The guide is operated with the mouse; it has no keyboard navigation (the player keeps its keyboard controls).
 
-Mouse: hovering previews a programme and never runs anything. A click selects the programme and runs its action: on now = live playback, already aired = the recording or the unavailable state, not started = reminder setup (for a programme with a reminder, its settings; removing is done with the action button). A double-click runs it only once. While the keyboard is in use, a resting mouse pointer is ignored.
+- Hover a programme to preview it in the card above; hovering never runs anything.
+- The first click selects a programme (green block) and the preview card shows it. A click on the selected programme runs its action: on now = live playback, already aired = the recording or the unavailable state, not started = reminder setup (for a programme with a reminder, its settings), demo channel = a "no stream" popup. A double-click selects and runs it once.
+- The preview card's buttons act on the programme it shows: **Watch now** (on air), **Watch recording** (aired), **Set reminder** / **Remove reminder** (not started), and **Similar to this** (three mock recommendations; no personalisation service exists). Removing a reminder is only possible from this button. The preview thumbnail is not interactive.
+- **Recommended to you** (right end of the filter row) opens a side panel with up to 15 mock picks from the guide (not personalised): programmes on now (EPG button "Watch now") and already aired ("Watch recording"); never upcoming ones. Clicking a title does exactly what its EPG button does: it plays when it can (TV 560407 live, or the sample recording), otherwise the existing "no stream" / "No recording available" popup explains why. Selection, category and channel order are left as they were.
+- **Popular now** (next to "Recommended to you") opens the same kind of side panel with up to 10 programmes in a **mock** popularity order (a fixed score per programme; not viewing figures), each with a #1–#10 badge, the top three in green. Only programmes on now or already aired *with* an actual recording are eligible; upcoming ones never are. Clicking does exactly what the programme's EPG button does.
+- Popups close with their buttons, a click outside, or Esc. Inside a popup the browser's own keyboard handling still works (Tab, Enter / Space on the focused control).
 
-States: hover = thin green outline, keyboard focus = green outline, selection = green block. Buttons stay dark: grey border at rest, green border on hover, the same single green border on hover and keyboard focus (also for every player control), green fill only while pressed. New reminders start with the delivery methods saved last time (Email if none yet), kept in memory while the app runs. The CGates green is `#21b14b`.
+States: hover = thin green outline, selection = green block. Buttons stay dark: grey border at rest, green border on hover, green fill only while pressed. New reminders start with the delivery methods saved last time (Email if none yet), kept in memory while the app runs. The CGates green is `#21b14b`.
 
 **Category filters**
 
-The pills above the preview card show **All** (default), **Music**, **History**, **Sport** or **Movies**. Each channel belongs to exactly one category (`category` in `src/data/channels.ts`; a demo assignment based on channel names and mock schedules). All and each category keep their own channel order: reordering in one view never changes another. If a filter hides the selected programme, the programme on now on the first visible channel is selected instead. Keyboard: Down from the header (or Up from the preview card's button) reaches the active pill, Left/Right move between pills, Enter applies one. The filter is kept while you visit the player but resets to All on reload.
+The pills above the preview card show **All** (default), **Music**, **History**, **Sport** or **Movies**. Each channel belongs to exactly one category (`category` in `src/data/channels.ts`; a demo assignment based on channel names and mock schedules). All and each category keep their own channel order: reordering in one view never changes another. If a filter hides the selected programme, the programme on now on the first visible channel is selected instead. Click a pill to apply it. The filter is kept while you visit the player but resets to All on reload.
 
 **Channel order**
 
