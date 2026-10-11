@@ -9,11 +9,13 @@ const PATHS = {
   guide: 'M4 5h16v3H4zM4 10.5h7v3H4zM13 10.5h7v3h-7zM4 16h11v3H4z',
   retry: 'M18.5 9A7 7 0 1 0 19 13M19 4v5h-5',
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 10.5V17M12 7v.5',
+  bell: 'M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 21h4',
+  check: 'M5 12.5 9.5 17 19 7.5',
 } as const
 
 export type IconName = keyof typeof PATHS
 
-const STROKED: ReadonlySet<IconName> = new Set(['back', 'volume', 'mute', 'retry', 'info'])
+const STROKED: ReadonlySet<IconName> = new Set(['back', 'volume', 'mute', 'retry', 'info', 'bell', 'check'])
 
 export default function Icon({ name, size = '1.25em' }: { name: IconName; size?: string }) {
   const stroked = STROKED.has(name)

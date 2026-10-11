@@ -296,6 +296,28 @@
 
 .guide-state { flex: 1; display: grid; place-items: center; padding: 2rem; }
 
+/* ---- Programme dialog (reminder / no recording) --------------------------------- */
+.programme-dialog {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  max-width: calc(100vw - 2rem);
+  overflow: visible;
+}
+.programme-dialog::backdrop { background: rgb(0 0 0 / 0.7); }
+.dialog-card { background: var(--surface-1); box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.55); }
+.dialog-message { display: grid; gap: 0.75rem; }
+.dialog-title { display: flex; align-items: center; gap: 0.625rem; }
+.dialog-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: var(--text-3);
+  font-size: 0.875rem;
+}
+.dialog-note .icon { margin-top: 0.15em; }
+
 /* ---- Smaller viewports ------------------------------------------------------------ */
 @media (max-height: 820px) {
   .details-slot { height: 17rem; }
@@ -307,7 +329,7 @@
 @media (max-width: 900px) {
   :root { --pad-x: 1.25rem; }
   .guide-screen { --col: 11rem; }
-  .preview, .epg-channel .channel-logo, .data-note, .key-hints-note { display: none; }
+  .preview, .epg-channel .channel-logo, .key-hints-note { display: none; }
   .details { grid-template-columns: minmax(0, 1fr); }
   .app-header { gap: 1.25rem; }
 }

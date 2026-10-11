@@ -2,30 +2,49 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GuideLoad, Selection } from '../../App'
 import AppHeader from '../../components/AppHeader'
 import Icon from '../../components/Icon'
+import type { Channel } from '../../data/channels'
+import { availabilityOf, phaseOf } from '../../data/epg'
 import type { Programme } from '../../data/epg'
 import { useNow } from '../../lib/time'
 import DetailsPanel from './DetailsPanel'
 import EpgGrid from './EpgGrid'
 import type { EpgGridHandle } from './EpgGrid'
+import ProgrammeDialog from './ProgrammeDialog'
+import type { DialogKind } from './ProgrammeDialog'
 import './guide.css'
 
 interface Props {
   load: GuideLoad
   initialFocusId: string | null
   onFocusChange: (id: string) => void
+  reminders: ReadonlySet<string>
+  onReminderSet: (programmeId: string) => void
   onOpen: (selection: Selection) => void
   onWatchLive: () => void
   onRetry: () => void
 }
 
+type Dialog = { kind: DialogKind; programme: Programme; channel: Channel }
+
 const navItems = (group: string) =>
   Array.from(document.querySelectorAll<HTMLElement>(`[data-nav="${group}"]:not(:disabled)`))
 
-export default function GuideScreen({ load, initialFocusId, onFocusChange, onOpen, onWatchLive, onRetry }: Props) {
+export default function GuideScreen({
+  load,
+  initialFocusId,
+  onFocusChange,
+  reminders,
+  onReminderSet,
+  onOpen,
+  onWatchLive,
+  onRetry,
+}: Props) {
   const now = useNow(15_000)
   const gridRef = useRef<EpgGridHandle>(null)
   const [selected, setSelected] = useState<Programme | null>(null)
   const [hovered, setHovered] = useState<Programme | null>(null)
+  const [dialog, setDialog] = useState<Dialog | null>(null)
+  const dialogOpen = dialog !== null
 
   const guide = load.state === 'ready' ? load.guide : null
   const channelById = useMemo(() => new Map(guide?.channels.map((c) => [c.id, c])), [guide])
@@ -38,16 +57,30 @@ export default function GuideScreen({ load, initialFocusId, onFocusChange, onOpe
     [onFocusChange],
   )
 
-  const open = useCallback(
+  // OK on a programme and the details panel's primary action. Only what can really play
+  // opens the player; the rest explains itself here, without leaving the guide.
+  // Demo channels go to the player, which explains that they have no stream.
+  const activate = useCallback(
     (p: Programme) => {
       const channel = channelById.get(p.channelId)
-      if (channel) onOpen({ channel, programme: p })
+      if (!channel) return
+      const t = Date.now()
+      if (phaseOf(p, t) === 'upcoming') setDialog({ kind: 'reminder', programme: p, channel })
+      else if (availabilityOf(p, channel, t) === 'no-recording') setDialog({ kind: 'no-recording', programme: p, channel })
+      else onOpen({ channel, programme: p })
     },
     [channelById, onOpen],
   )
 
+  const closeDialog = useCallback(() => {
+    setDialog(null)
+    gridRef.current?.focus()
+  }, [])
+
   // Arrow keys outside the grid: header row <-> details actions <-> grid.
+  // An open dialog handles its own keys.
   useEffect(() => {
+    if (dialogOpen) return
     const onKey = (e: KeyboardEvent) => {
       const active = document.activeElement as HTMLElement | null
       const group = active?.dataset.nav
@@ -80,7 +113,7 @@ export default function GuideScreen({ load, initialFocusId, onFocusChange, onOpe
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [dialogOpen])
 
   // Without a grid (loading / error / empty) start focus in the header.
   useEffect(() => {
@@ -92,7 +125,7 @@ export default function GuideScreen({ load, initialFocusId, onFocusChange, onOpe
 
   return (
     <div className="guide-screen">
-      <AppHeader onGuide={() => gridRef.current?.focus()} onLive={onWatchLive} />
+      <AppHeader onGuide={() => gridRef.current?.focus()} />
 
       {guide && guide.channels.length > 0 ? (
         <>
@@ -102,7 +135,8 @@ export default function GuideScreen({ load, initialFocusId, onFocusChange, onOpe
                 programme={shown}
                 channel={shownChannel}
                 now={now}
-                onOpen={() => open(shown)}
+                reminderSet={reminders.has(shown.id)}
+                onActivate={() => activate(shown)}
                 onWatchLive={onWatchLive}
               />
             )}
@@ -114,7 +148,7 @@ export default function GuideScreen({ load, initialFocusId, onFocusChange, onOpe
             selectedId={selected?.id ?? initialFocusId}
             onSelect={select}
             onHover={setHovered}
-            onOpen={open}
+            onOpen={activate}
             onExitUp={() => navItems('header')[0]?.focus()}
           />
           <footer className="key-hints" aria-hidden="true">
@@ -134,6 +168,18 @@ export default function GuideScreen({ load, initialFocusId, onFocusChange, onOpe
               Schedules are demo data. Only {guide.channels[0].name} has a real stream.
             </span>
           </footer>
+          {dialog && (
+            <ProgrammeDialog
+              key={dialog.programme.id}
+              kind={dialog.kind}
+              programme={dialog.programme}
+              channel={dialog.channel}
+              reminderSet={reminders.has(dialog.programme.id)}
+              onReminderSet={onReminderSet}
+              onWatchLive={onWatchLive}
+              onClose={closeDialog}
+            />
+          )}
         </>
       ) : (
         <div className="guide-state">

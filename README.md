@@ -39,7 +39,8 @@ src/
 - Arrows: move through programmes. Up/Down keep the same point in time across channels.
 - Page Up / Page Down: jump 5 channels.
 - Up from the first channel: header navigation.
-- Enter: open the player for the selected programme.
+- Enter: the selected programme's main action — **Watch online** (on now), **Watch now** (already aired) or **Set reminder** (not started). Anything that cannot play explains why in a dialog instead of opening the player.
+- In a dialog: arrows move between the buttons; Esc / Backspace returns to the guide.
 - Esc / Backspace: return to what's on now.
 
 Hovering with the mouse updates the details panel but never leaves the guide.
@@ -59,6 +60,7 @@ Hovering with the mouse updates the details panel but never leaves the guide.
 - **Guide preview (real, live only):** a muted 360p live preview appears only for the programme that is on air on the real channel. Every other programme gets an explicit "no preview" message.
 - **Recording:** the provided recording URL is a relative 30-second window from about 2 h 44 min ago. It is attached to whichever demo programme was on air at that time and labelled as a sample. It is **Widevine-encrypted** and no licence server was provided, so playback fails with a clear "copy-protected" message (Shaka error 6001 in Chrome).
 - **Demo data:** every schedule, including the real channel's, is generated locally. Demo channels have no stream. Opening one shows an explanation and offers the real live channel instead.
+- **Reminders (prototype only):** there is no reminder backend or email service. Setting a reminder only shows a confirmation and remembers it until the page is reloaded; **no email is scheduled or sent**. `src/data/reminders.ts` is the single place to connect a real reminder API.
 - Add `?epg=empty` or `?epg=error` to the URL to see the guide's empty and error states.
 
 ## Future improvements

@@ -12,16 +12,21 @@ interface Props {
   programme: Programme
   channel: Channel
   now: number
-  onOpen: () => void
+  reminderSet: boolean
+  /** The primary action; the guide decides whether it plays or explains. */
+  onActivate: () => void
   onWatchLive: () => void
 }
 
+// The primary action follows the programme's time: on now = watch online, already aired =
+// watch the recording (or explain why there is none), not started = set a reminder.
+// Demo channels have nothing to play, so OK there opens the explanation instead.
 const ACTION: Record<Availability, string> = {
-  live: 'Watch live',
-  recording: 'Play sample recording',
-  demo: 'Open details',
-  'no-recording': 'Open details',
-  upcoming: 'Open details',
+  live: 'Watch online',
+  recording: 'Watch now',
+  'no-recording': 'Watch now',
+  upcoming: 'Set reminder',
+  demo: 'More info',
 }
 
 function statusLine(p: Programme, now: number): string {
@@ -50,11 +55,14 @@ function useDebounced<T>(value: T, ms: number): T {
   return v
 }
 
-export default function DetailsPanel({ programme: p, channel, now, onOpen, onWatchLive }: Props) {
+export default function DetailsPanel({ programme: p, channel, now, reminderSet, onActivate, onWatchLive }: Props) {
   const avail = availabilityOf(p, channel, now)
   const phase = phaseOf(p, now)
   const progress = phase === 'current' ? (now - p.start) / (p.end - p.start) : 0
   const note = NOTE[avail]
+  // Reminders depend only on time, so they apply to demo channels too.
+  const upcoming = phase === 'upcoming'
+  const label = upcoming ? (reminderSet ? 'Reminder set' : ACTION.upcoming) : ACTION[avail]
 
   // A muted preview is only possible where a real stream exists and is on air.
   const previewUrl = useDebounced(avail === 'live' ? (channel.streamUrl ?? null) : null, 350)
@@ -118,19 +126,19 @@ export default function DetailsPanel({ programme: p, channel, now, onOpen, onWat
         <p className="details-desc">{p.description}</p>
 
         <div className="details-actions">
-          {avail === 'live' || avail === 'recording' ? (
-            <button type="button" data-nav="details" className="btn btn-primary" onClick={onOpen}>
-              <Icon name="play" />
-              {ACTION[avail]}
-            </button>
-          ) : (
+          {avail === 'demo' && !upcoming ? (
             <button type="button" data-nav="details" className="btn btn-secondary" onClick={onWatchLive}>
               <span className="status-dot" aria-hidden="true" />
               Watch {REAL_CHANNEL.name} live
             </button>
+          ) : (
+            <button type="button" data-nav="details" className="btn btn-primary" onClick={onActivate}>
+              <Icon name={upcoming ? (reminderSet ? 'check' : 'bell') : 'play'} />
+              {label}
+            </button>
           )}
           <span className="details-hint">
-            <kbd>OK</kbd> {ACTION[avail]}
+            <kbd>OK</kbd> {label}
           </span>
         </div>
         {note && (

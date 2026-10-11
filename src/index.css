@@ -193,14 +193,6 @@ kbd {
 .nav-item:focus-visible { background: var(--focus-bg); color: var(--focus-text); }
 
 .app-header-end { margin-left: auto; display: flex; align-items: center; gap: 2rem; }
-.data-note {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-2);
-  padding: 0.25rem 0.625rem;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-}
 .clock { display: flex; align-items: baseline; gap: 0.625rem; font-variant-numeric: tabular-nums; }
 .clock-time { font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .clock-date { font-size: 0.875rem; color: var(--text-2); }

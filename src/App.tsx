@@ -21,6 +21,9 @@ export default function App() {
   const [load, setLoad] = useState<GuideLoad>({ state: 'loading' })
   // Remembered so the guide restores focus to where the user left it.
   const [lastFocusId, setLastFocusId] = useState<string | null>(null)
+  // Programme ids with a reminder. Prototype: kept in memory only, see data/reminders.ts.
+  const [reminders, setReminders] = useState<ReadonlySet<string>>(() => new Set())
+  const addReminder = useCallback((id: string) => setReminders((prev) => new Set(prev).add(id)), [])
 
   const loadGuide = useCallback(() => {
     fetchGuide().then(
@@ -62,6 +65,8 @@ export default function App() {
       load={load}
       initialFocusId={lastFocusId}
       onFocusChange={setLastFocusId}
+      reminders={reminders}
+      onReminderSet={addReminder}
       onOpen={openPlayer}
       onWatchLive={openLive}
       onRetry={retryGuide}
