@@ -63,17 +63,18 @@ kbd {
   font-weight: 600;
   font-size: 0.9375rem;
   white-space: nowrap;
-  border: 1px solid transparent;
+  border: 2px solid transparent;
 }
-.btn-primary { background: var(--text); color: var(--focus-text); }
-.btn-secondary { background: rgb(255 255 255 / 0.08); border-color: var(--line-2); }
+/* Buttons stay dark in every state except while pressed:
+   rest = neutral border, hover = green border, keyboard focus = green border plus the
+   focus ring, pressed = green fill with dark text. */
+.btn-primary { background: var(--surface-3); border-color: #6e737b; color: var(--text); }
+.btn-secondary { background: rgb(255 255 255 / 0.05); border-color: var(--line-2); }
 .btn-ghost { background: transparent; color: var(--text-2); padding: 0 1rem 0 0.75rem; }
-/* Hover (pointer) changes the fill only; keyboard focus adds the green ring. */
-.btn:hover { background: rgb(255 255 255 / 0.16); color: var(--text); }
-.btn-primary:hover { background: #dff3e5; color: var(--focus-text); }
-.btn:focus-visible { box-shadow: var(--focus-ring); }
-.btn-secondary:focus-visible, .btn-ghost:focus-visible { background: rgb(255 255 255 / 0.14); color: var(--text); }
-.btn-primary:focus-visible { background: #fff; }
+.btn:hover { border-color: var(--brand); color: var(--text); }
+.btn:focus-visible { border-color: var(--brand); color: var(--text); box-shadow: var(--focus-ring); }
+.btn:active,
+.btn.is-pressed { background: var(--brand); border-color: var(--brand); color: var(--focus-text); }
 
 /* ---- Small shared pieces ---------------------------------------------------- */
 .tag {

@@ -121,6 +121,9 @@ export default function ProgrammeDialog({
   const onKeyDown = (e: KeyboardEvent<HTMLDialogElement>) => {
     const target = e.target as HTMLElement
     if (e.repeat && (e.key === 'Enter' || e.key === ' ')) return // see the guard in App
+    // Controls in reading order: checkboxes, then the action buttons.
+    const controls = Array.from(ref.current?.querySelectorAll<HTMLElement>('button, input') ?? [])
+    const i = controls.indexOf(target)
     if (e.key === 'Backspace' || e.key === 'BrowserBack') {
       e.preventDefault()
       close()
@@ -131,10 +134,15 @@ export default function ProgrammeDialog({
     } else if (e.key.startsWith('Arrow')) {
       // TV remote: arrows move through the controls in reading order.
       e.preventDefault()
-      const controls = Array.from(ref.current?.querySelectorAll<HTMLElement>('button, input') ?? [])
-      const i = controls.indexOf(target)
       const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1
       controls[Math.min(controls.length - 1, Math.max(0, i + step))]?.focus()
+    } else if (e.key === 'Tab' && controls.length) {
+      // Tab cycles inside the dialog instead of escaping to the browser's own UI.
+      const atEdge = e.shiftKey ? i <= 0 : i === controls.length - 1
+      if (atEdge) {
+        e.preventDefault()
+        controls[e.shiftKey ? controls.length - 1 : 0].focus()
+      }
     }
   }
 
@@ -200,7 +208,8 @@ export default function ProgrammeDialog({
       onKeyDown={onKeyDown}
       onClick={onClick}
     >
-      <div className="state-card state-card-wide dialog-card">
+      {/* Focusable so a click on plain text inside keeps focus in the dialog. */}
+      <div className="state-card state-card-wide dialog-card" tabIndex={-1}>
         <p className="state-eyebrow">
           {p.title} · {formatDay(p.start, now)}, {formatRange(p.start, p.end)} · {channel.name}
         </p>

@@ -38,16 +38,16 @@ src/
 
 - Arrows: move keyboard focus through programmes; the preview card follows the focused programme. Up/Down keep the same point in time across channels.
 - Page Up / Page Down: jump 5 channels.
-- Enter (or Space) on a programme confirms it as the selection (green block). It never starts playback.
-- Enter on the selected programme, or Up from the first channel, moves to the preview card's action button (**Watch now**, **Set reminder** or **Remove reminder**). Enter or Space there runs it, once, even if the key is held.
+- Enter (or Space) on a programme confirms it as the selection (green block) and keeps focus on it. Programmes never start playback or change reminders themselves.
+- Up from the first channel, or Shift+Tab from any programme, moves to the preview card's action button (**Watch now**, **Set reminder** or **Remove reminder**). Enter or Space there runs it, once, even if the key is held.
 - Up from the action button: header. Down: back to the programme you came from.
 - Anything that cannot play explains why in a dialog instead of opening the player. Removing a reminder is only possible from the action button.
-- In a dialog: arrows move between the controls, Enter or Space toggles a checkbox, and Esc / Backspace closes it and returns focus to whatever opened it.
+- In a dialog: focus starts on the main button; arrows or Tab / Shift+Tab move between the controls (Tab wraps around inside the dialog), Enter or Space toggles a checkbox, and Esc / Backspace closes it and returns focus to the button that opened it.
 - Esc / Backspace in the grid: return to what's on now.
 
-Mouse: hovering previews a programme without changing the selection; the first click selects it, and the action button (or a click on the selected programme) runs its action. Hover never starts playback or changes a reminder. While the keyboard is in use, a resting mouse pointer is ignored.
+Mouse: hovering previews a programme without changing the selection; a click selects it, and the action button runs its action. Clicking (or double-clicking) a programme never starts playback or changes a reminder. While the keyboard is in use, a resting mouse pointer is ignored.
 
-States: hover = thin green outline, keyboard focus = green outline, selection = green block, action button = grey border at rest, green border on hover/focus, green fill while pressed. The CGates green is `#21b14b`.
+States: hover = thin green outline, keyboard focus = green outline, selection = green block. Buttons stay dark: grey border at rest, green border on hover, green border plus ring on keyboard focus, green fill only while pressed. The CGates green is `#21b14b`.
 
 **Player**
 

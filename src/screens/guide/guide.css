@@ -89,13 +89,6 @@
 }
 .details-actions { display: flex; align-items: center; gap: 1.25rem; margin-top: 1.5rem; }
 .details-actions .btn { height: 3rem; padding: 0 1.5rem 0 1.25rem; font-size: 1rem; }
-/* Preview card action: neutral border at rest, green border on hover, green border and
-   ring on keyboard focus, green fill only while pressed. */
-.btn.action-btn { border: 2px solid #8a9099; }
-.btn.action-btn:hover { background: var(--text); border-color: var(--brand); }
-.btn.action-btn:focus-visible { background: #fff; border-color: var(--brand); box-shadow: var(--focus-ring); }
-.btn.action-btn:active,
-.btn.action-btn.is-pressed { background: var(--brand); border-color: var(--brand); color: var(--focus-text); }
 
 /* ---- Grid ---------------------------------------------------------------------- */
 .epg { position: relative; flex: 1; min-height: 0; background: var(--surface-0); }
@@ -330,7 +323,7 @@
   height: 2.75rem;
   padding: 0 1.25rem 0 0.875rem;
   border-radius: 999px;
-  border: 1px solid var(--line-2);
+  border: 2px solid var(--line-2);
   background: rgb(255 255 255 / 0.04);
   font-weight: 600;
   font-size: 0.9375rem;
@@ -347,11 +340,17 @@
   border-radius: 0.25rem;
   border: 1.5px solid var(--text-3);
 }
-.method:has(input:checked) { background: rgb(255 255 255 / 0.1); border-color: rgb(255 255 255 / 0.28); }
-.method:has(input:checked) .method-box { background: var(--text); border-color: var(--text); color: var(--focus-text); }
-.method:hover { background: rgb(255 255 255 / 0.16); }
-.method:has(input:focus-visible) { background: rgb(255 255 255 / 0.14); box-shadow: var(--focus-ring); }
+.method:has(input:checked) { border-color: #6e737b; }
+.method:has(input:checked) .method-box { background: var(--brand); border-color: var(--brand); color: var(--focus-text); }
+.method:hover { border-color: var(--brand); }
+.method:has(input:focus-visible) { border-color: var(--brand); box-shadow: var(--focus-ring); }
+/* Focus inside the dialog is always moved there in code, which browsers may not mark as
+   :focus-visible after a mouse click. Style plain :focus so focus is never invisible. */
+.programme-dialog .btn:focus { border-color: var(--brand); color: var(--text); box-shadow: var(--focus-ring); }
+.programme-dialog .btn:active { color: var(--focus-text); }
+.programme-dialog .method:has(input:focus) { border-color: var(--brand); box-shadow: var(--focus-ring); }
 .btn[aria-disabled='true'] { opacity: 0.5; cursor: default; }
+.btn[aria-disabled='true']:active { background: var(--surface-3); border-color: var(--brand); color: var(--text); }
 
 /* ---- Smaller viewports ------------------------------------------------------------ */
 @media (max-height: 820px) {

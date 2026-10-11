@@ -21,10 +21,6 @@ interface Props {
   onFocusProgramme: (p: Programme) => void
   onSelect: (p: Programme) => void
   onHover: (p: Programme | null) => void
-  /** Click on the already-selected programme: shortcut for its primary action. */
-  onOpen: (p: Programme) => void
-  /** Enter / OK on the already-selected programme: move on to its primary action. */
-  onEnterSelected: (p: Programme) => void
   onExitUp: () => void
 }
 
@@ -42,8 +38,6 @@ export default function EpgGrid({
   onFocusProgramme,
   onSelect,
   onHover,
-  onOpen,
-  onEnterSelected,
   onExitUp,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -156,15 +150,10 @@ export default function EpgGrid({
     }
   }, [geometry, index, rows, focusedId, selectedId, currentOnRow, focusProgramme])
 
-  // Mouse: the first click selects (and previews) a programme; a click on the
-  // already-selected one is a shortcut for its primary action. Focusing never selects,
-  // so the selection read here is the one from before this click.
+  // Programme blocks only ever select. Their action is run from the preview card's
+  // button, so a click (or a double-click) on a programme never starts playback.
   const onCellClick = (e: MouseEvent<HTMLButtonElement>, p: Programme) => {
     if (e.detail === 0) return // keyboard "clicks" are handled in onKeyDown
-    if (p.id === selectedId) {
-      onOpen(p)
-      return
-    }
     onSelect(p)
     focusProgramme(p)
     anchor.current = Math.max(p.start, Math.min(timeAtViewLeft(), p.end - MIN))
@@ -183,13 +172,10 @@ export default function EpgGrid({
     switch (e.key) {
       case 'Enter':
       case ' ': {
-        // Keyboard: the first Enter confirms the selection, the next one moves on to the
-        // preview card's action. Enter in the grid never starts playback by itself.
+        // Enter confirms the selection and keeps focus here. The action is reached by
+        // moving to the preview card's button (Up from the first channel, or Shift+Tab).
         e.preventDefault()
-        if (e.repeat) return
-        const p = rows[pos.row][pos.col]
-        if (p.id === selectedId) onEnterSelected(p)
-        else onSelect(p)
+        if (!e.repeat) onSelect(rows[pos.row][pos.col])
         return
       }
       case 'ArrowRight':
