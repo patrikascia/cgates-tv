@@ -43,6 +43,7 @@ src/
 - Anything that cannot play explains why in a dialog instead of opening the player. Removing a reminder is only possible from the action button.
 - In a dialog: focus starts on the main button; arrows or Tab / Shift+Tab move between the controls (Tab wraps around inside the dialog), Enter or Space toggles a checkbox, and Esc / Backspace closes it and returns focus to the button that opened it.
 - Esc / Backspace in the grid: return to what's on now.
+- Returning from the player or closing any dialog puts focus back on the programme that was selected.
 
 Mouse: hovering previews a programme and never runs anything. A click selects the programme and runs its action: on now = live playback, already aired = the recording or the unavailable state, not started = reminder setup (for a programme with a reminder, its settings; removing is done with the action button). A double-click runs it only once. While the keyboard is in use, a resting mouse pointer is ignored.
 
@@ -50,8 +51,9 @@ States: hover = thin green outline, keyboard focus = green outline, selection = 
 
 **Player**
 
-- Arrows move between the top bar, the scrubber and the control row.
-- On the scrubber: Left/Right moves a preview marker by 10 s; it is applied after a short pause, or straight away with Enter. Esc cancels it.
+- Focus starts on Play/Pause. Left/Right move through the enabled controls (rewind, forward, Go live, mute). Up goes to the Guide button at the top left; Down returns to Play/Pause.
+- The volume slider and the scrubber are mouse controls and are skipped by the arrow keys, so arrows never change the volume or seek by accident. After using either with the mouse, focus moves to Mute or Play/Pause.
+- The scrubber can still be reached with Tab: Left/Right then moves a preview marker by 10 s; it is applied after a short pause, or straight away with Enter. Esc cancels it.
 - Space or K: play/pause. M: mute.
 - Esc / Backspace: back to the guide.
 - While the controls are hidden, the first key press only shows them again.

@@ -67,7 +67,6 @@ export default function GuideScreen({
   const [zone, setZone] = useState<Zone>('grid')
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const dialogOpen = dialog !== null
-  const dialogReturn = useRef<HTMLElement | null>(null)
 
   const guide = load.state === 'ready' ? load.guide : null
   const channelById = useMemo(() => new Map(guide?.channels.map((c) => [c.id, c])), [guide])
@@ -123,10 +122,7 @@ export default function GuideScreen({
       const channel = channelById.get(p.channelId)
       if (!channel) return
       const t = Date.now()
-      const show = (kind: DialogKind) => {
-        dialogReturn.current = document.activeElement as HTMLElement | null
-        setDialog({ kind, programme: p, channel })
-      }
+      const show = (kind: DialogKind) => setDialog({ kind, programme: p, channel })
       if (phaseOf(p, t) === 'upcoming') show(from === 'button' && reminders.has(p.id) ? 'remove-reminder' : 'reminder')
       else if (!channel.streamUrl) show('no-stream')
       else if (availabilityOf(p, channel, t) === 'no-recording') show('no-recording')
@@ -143,13 +139,11 @@ export default function GuideScreen({
     [select],
   )
 
-  // Back to whatever opened the dialog: the preview card's button or the programme.
-  const closeDialog = useCallback(() => {
+  // Closing a dialog returns focus to its programme in the grid (the selected one), which
+  // also keeps that programme in the preview card.
+  const closeDialog = useCallback((p: Programme) => {
     setDialog(null)
-    const el = dialogReturn.current
-    dialogReturn.current = null
-    if (el?.isConnected && el !== document.body) el.focus()
-    else gridRef.current?.focus()
+    gridRef.current?.focus(p.id)
   }, [])
 
   // Arrow keys outside the grid: header row <-> details actions <-> grid.
@@ -251,7 +245,7 @@ export default function GuideScreen({
               onReminderSaved={onReminderSaved}
               onReminderRemoved={onReminderRemoved}
               onWatchLive={onWatchLive}
-              onClose={closeDialog}
+              onClose={() => closeDialog(dialog.programme)}
             />
           )}
         </>

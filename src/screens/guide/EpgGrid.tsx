@@ -6,8 +6,8 @@ import type { Guide, Programme } from '../../data/epg'
 import { formatDay, formatRange, formatTime } from '../../lib/time'
 
 export interface EpgGridHandle {
-  /** Focus the focused programme, else the selected one, else what is on air on the first channel. */
-  focus: () => void
+  /** Focus a programme: the given one, else the focused one, else the selected one, else what is on air on the first channel. */
+  focus: (id?: string) => void
 }
 
 interface Props {
@@ -128,8 +128,8 @@ export default function EpgGrid({
   useImperativeHandle(
     ref,
     () => ({
-      focus: () => {
-        const target = focusedId ?? selectedId
+      focus: (id?: string) => {
+        const target = id ?? focusedId ?? selectedId
         const p = (target && rows.flat().find((x) => x.id === target)) || currentOnRow(0)
         if (p) focusProgramme(p)
       },

@@ -257,22 +257,24 @@
 
 /* States:
    - hover (mouse in use)  = thin green outline
-   - keyboard focus        = 2px green outline on a lifted surface
+   - focus                 = 2px green outline on a lifted surface
    - selected (confirmed)  = green fill, dark text; stays visible wherever focus is
-   - selected + focused    = green fill with a dark inner ring
+   - selected + focused    = green fill with a green focus border just outside it
+   Focus uses :focus, not :focus-visible, so it also shows when focus is restored in code
+   after a mouse click (returning from the player or a dialog).
    Hover outlines are off while the keyboard is in use, so a resting cursor never
    competes with keyboard focus. */
 .guide-screen[data-input='pointer'] .cell:hover { background: #30343a; box-shadow: inset 0 0 0 1px var(--brand); }
 .guide-screen[data-input='pointer'] .phase-past:hover { background: #24272c; }
-.cell:focus-visible { z-index: 1; background: #30343a; box-shadow: inset 0 0 0 2px var(--brand); }
-.cell:focus-visible .cell-title { color: var(--text); font-weight: 650; }
+.cell:focus { z-index: 1; background: #30343a; box-shadow: inset 0 0 0 2px var(--brand); }
+.cell:focus .cell-title { color: var(--text); font-weight: 650; }
 .cell.is-selected,
 .guide-screen[data-input='pointer'] .cell.is-selected:hover { z-index: 1; background: var(--brand); box-shadow: none; }
 .cell.is-selected .cell-title { color: var(--focus-text); font-weight: 650; }
 .cell.is-selected .cell-meta { color: rgb(10 11 13 / 0.78); }
 .cell.is-selected .cell-progress { background: var(--focus-text); }
 .cell.is-selected .tag-rec { color: var(--focus-text); }
-.cell.is-selected:focus-visible { box-shadow: inset 0 0 0 2px var(--brand), inset 0 0 0 4px var(--focus-text); }
+.cell.is-selected:focus { box-shadow: none; outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* ---- Footer / states ------------------------------------------------------------ */
 .guide-footer {

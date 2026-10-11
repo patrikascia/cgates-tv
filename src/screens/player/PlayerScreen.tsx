@@ -19,7 +19,6 @@ interface Props {
   onWatchLive: () => void
 }
 
-const ROWS = ['top', 'scrub', 'controls'] as const
 const LIVE_TOLERANCE = 8 // s; one segment
 
 const focusables = (row: string) =>
@@ -27,24 +26,31 @@ const focusables = (row: string) =>
     (el) => !(el as HTMLButtonElement).disabled && el.tabIndex >= 0 && el.offsetParent !== null,
   )
 
-/** Moves focus between player rows with the arrow keys (TV remote style). */
+/** Play/Pause during playback, otherwise the first available action. */
+const homeControl = () =>
+  document.querySelector<HTMLElement>('[data-home]:not(:disabled)') ?? focusables('controls')[0] ?? focusables('top')[0]
+
+/**
+ * Arrow-key navigation (TV remote style). Up/Down switch between the bottom controls and
+ * the Guide button at the top; Down always lands on Play/Pause. Left/Right move through
+ * the enabled bottom controls. The scrubber and the volume slider are not on this path,
+ * so arrow keys never seek or change the volume by accident.
+ */
 function moveFocus(key: string): boolean {
   const active = document.activeElement as HTMLElement | null
   const row = active?.dataset.row
-  if (!row) {
-    const first = focusables('controls')[0] ?? focusables('top')[0]
-    first?.focus()
-    return Boolean(first)
+  if (!row || row === 'scrub') {
+    homeControl()?.focus()
+    return true
   }
   if (key === 'ArrowLeft' || key === 'ArrowRight') {
     const list = focusables(row)
-    const i = list.indexOf(active!)
-    list[i + (key === 'ArrowRight' ? 1 : -1)]?.focus()
-    return true
+    list[list.indexOf(active!) + (key === 'ArrowRight' ? 1 : -1)]?.focus()
+  } else if (key === 'ArrowUp' && row === 'controls') {
+    focusables('top')[0]?.focus()
+  } else if (key === 'ArrowDown' && row === 'top') {
+    homeControl()?.focus()
   }
-  const order = ROWS.filter((r) => focusables(r).length)
-  const target = order[order.indexOf(row as (typeof ROWS)[number]) + (key === 'ArrowDown' ? 1 : -1)]
-  if (target) focusables(target)[0]?.focus()
   return true
 }
 
@@ -220,6 +226,7 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const playBtn = useRef<HTMLButtonElement>(null)
+  const muteBtn = useRef<HTMLButtonElement>(null)
   const { state, togglePlay, seekBy, seekTo, goToLiveEdge, setVolume, toggleMute, retry } = usePlayer(videoRef, source)
   const isLive = source.kind === 'live'
   const { status } = state
@@ -244,6 +251,13 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
     : `${selection.programme?.title ?? source.title} · Sample recording`
 
   useEffect(() => playBtn.current?.focus(), [])
+
+  // Forward 10 s and Go live become disabled at the live edge. If one of them had focus,
+  // hand it to Play/Pause instead of letting it drop to the page.
+  useEffect(() => {
+    const active = document.activeElement as HTMLButtonElement | null
+    if (!active || active === document.body || (active.dataset.row && active.disabled)) playBtn.current?.focus()
+  }, [atLive, ready])
 
   // Keyboard. Capture phase so that, while the controls are hidden, the first key
   // press only reveals them instead of also seeking or toggling something unseen.
@@ -276,14 +290,10 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
       } else if (e.key === 'm') {
         toggleMute()
       } else if (e.key.startsWith('Arrow')) {
-        const range = active instanceof HTMLInputElement && active.type === 'range'
-        // The volume slider keeps Left/Right for itself except at its ends.
-        if (range && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-          const v = Number(active.value)
-          const atEdge = (e.key === 'ArrowLeft' && v <= 0) || (e.key === 'ArrowRight' && v >= 1)
-          if (!atEdge) return
-        }
-        if (moveFocus(e.key)) e.preventDefault()
+        // preventDefault also stops a focused volume slider from changing the volume.
+        e.preventDefault()
+        if (active?.classList.contains('volume')) muteBtn.current?.focus()
+        else moveFocus(e.key)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -374,6 +384,8 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
 
       {status !== 'error' && (
         <div className="player-bottom">
+          {/* After a mouse seek, keyboard focus waits on Play/Pause, not on the scrubber. */}
+          <div className="scrubber-slot" onPointerUp={() => playBtn.current?.focus({ preventScroll: true })}>
           <Scrubber
             isLive={isLive}
             url={source.url}
@@ -385,6 +397,7 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
             programmeAt={programmeAtWall}
             onSeek={seekTo}
           />
+          </div>
 
           <div className="player-controls">
             <div className="controls-group">
@@ -393,6 +406,7 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
                 type="button"
                 className="ctl ctl-primary"
                 data-row="controls"
+                data-home
                 onClick={togglePlay}
                 aria-label={playing ? 'Pause' : 'Play'}
               >
@@ -451,6 +465,7 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
 
             <div className="controls-group">
               <button
+                ref={muteBtn}
                 type="button"
                 className="ctl"
                 data-row="controls"
@@ -466,16 +481,15 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
                 max={1}
                 step={0.05}
                 value={volume}
-                data-row="controls"
+                // Mouse only: arrow-key navigation stops at Mute, and after dragging,
+                // keyboard focus moves there so arrows cannot change the volume.
+                tabIndex={-1}
+                onPointerUp={() => muteBtn.current?.focus({ preventScroll: true })}
                 aria-label="Volume"
                 aria-valuetext={`${Math.round(volume * 100)}%`}
                 onChange={(e) => setVolume(Number(e.target.value))}
                 style={{ '--vol': volume } as CSSProperties}
               />
-              <button type="button" className="ctl ctl-text" data-row="controls" onClick={onBack}>
-                <Icon name="guide" />
-                Guide
-              </button>
             </div>
           </div>
         </div>
