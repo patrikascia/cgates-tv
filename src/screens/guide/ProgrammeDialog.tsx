@@ -4,24 +4,37 @@ import Icon from '../../components/Icon'
 import { REAL_CHANNEL } from '../../data/channels'
 import type { Channel } from '../../data/channels'
 import type { Programme } from '../../data/epg'
-import { EMAIL_REMINDERS_CONNECTED, setReminder } from '../../data/reminders'
+import {
+  DEFAULT_METHODS,
+  NOTIFICATIONS_DISCLAIMER,
+  methodsLabel,
+  removeReminder,
+  saveReminder,
+} from '../../data/reminders'
+import type { ReminderMethods } from '../../data/reminders'
 import { formatDay, formatRange, formatTime } from '../../lib/time'
 
-/** `reminder`: not started yet. `no-recording`: aired on the real channel, nothing to play. */
-export type DialogKind = 'reminder' | 'no-recording'
+/**
+ * `reminder`: set up (or change) a reminder for a programme that has not started.
+ * `remove-reminder`: remove the existing reminder, then confirm.
+ * `no-recording` / `no-stream`: explain why "Watch now" cannot play.
+ */
+export type DialogKind = 'reminder' | 'remove-reminder' | 'no-recording' | 'no-stream'
 
 interface Props {
   kind: DialogKind
   programme: Programme
   channel: Channel
-  reminderSet: boolean
-  onReminderSet: (programmeId: string) => void
+  /** The programme's current reminder, if any. */
+  reminder: ReminderMethods | null
+  onReminderSaved: (programmeId: string, methods: ReminderMethods) => void
+  onReminderRemoved: (programmeId: string) => void
   onWatchLive: () => void
   /** Fired once the dialog has closed: Back to guide, Esc, Backspace or a backdrop click. */
   onClose: () => void
 }
 
-type Stage = 'ask' | 'saving' | 'set' | 'failed'
+type Stage = 'setup' | 'saving' | 'saved' | 'removing' | 'removed' | 'remove-failed' | 'info'
 
 // "today", "tomorrow", "on Sun 12 Oct"
 function dayPhrase(ms: number, now: number): string {
@@ -29,18 +42,26 @@ function dayPhrase(ms: number, now: number): string {
   return day === 'Today' || day === 'Tomorrow' || day === 'Yesterday' ? day.toLowerCase() : `on ${day}`
 }
 
+const initialStage = (kind: DialogKind): Stage =>
+  kind === 'reminder' ? 'setup' : kind === 'remove-reminder' ? 'removing' : 'info'
+
 export default function ProgrammeDialog({
   kind,
   programme: p,
   channel,
-  reminderSet,
-  onReminderSet,
+  reminder,
+  onReminderSaved,
+  onReminderRemoved,
   onWatchLive,
   onClose,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
   const [now] = useState(() => Date.now())
-  const [stage, setStage] = useState<Stage>(reminderSet ? 'set' : 'ask')
+  const [stage, setStage] = useState<Stage>(() => initialStage(kind))
+  // Reopening an existing reminder keeps its methods; a new one starts with Email.
+  const [methods, setMethods] = useState<ReminderMethods>(reminder ?? DEFAULT_METHODS)
+  const [failed, setFailed] = useState(false)
+  const noMethod = !methods.email && !methods.sms
 
   // A native modal dialog makes the guide behind it inert, so focus cannot leave it.
   useEffect(() => {
@@ -48,37 +69,71 @@ export default function ProgrammeDialog({
     if (d && !d.open) d.showModal()
   }, [])
 
-  // Focus the first action, or "Back to guide" once the reminder is confirmed.
+  // Remove once on open. The ref guards against StrictMode running this effect twice.
+  const removeStarted = useRef(false)
   useEffect(() => {
-    ref.current?.querySelector<HTMLElement>(stage === 'set' ? '[data-back]' : 'button')?.focus()
+    if (kind !== 'remove-reminder' || removeStarted.current) return
+    removeStarted.current = true
+    removeReminder(p).then(
+      () => {
+        onReminderRemoved(p.id)
+        setStage('removed')
+      },
+      () => setStage('remove-failed'),
+    )
+  }, [kind, p, onReminderRemoved])
+
+  // Each stage puts focus on its most likely next action.
+  useEffect(() => {
+    const d = ref.current
+    ;(d?.querySelector<HTMLElement>('[data-initial]') ?? d?.querySelector<HTMLElement>('button'))?.focus()
   }, [stage])
 
   // Closing goes through the native dialog so its `close` event is the single exit path.
   const close = () => ref.current?.close()
 
-  const confirmReminder = () => {
+  const save = () => {
     if (stage === 'saving') return
+    if (noMethod) {
+      ref.current?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.focus()
+      return
+    }
     setStage('saving')
-    setReminder(p).then(
+    setFailed(false)
+    saveReminder(p, methods).then(
       () => {
-        onReminderSet(p.id)
-        setStage('set')
+        onReminderSaved(p.id, methods)
+        setStage('saved')
       },
-      () => setStage('failed'),
+      () => {
+        setFailed(true)
+        setStage('setup')
+      },
     )
   }
 
+  const setUpAgain = () => {
+    setMethods(DEFAULT_METHODS)
+    setFailed(false)
+    setStage('setup')
+  }
+
   const onKeyDown = (e: KeyboardEvent<HTMLDialogElement>) => {
+    const target = e.target as HTMLElement
     if (e.key === 'Backspace' || e.key === 'BrowserBack') {
       e.preventDefault()
       close()
-    } else if (e.key.startsWith('Arrow')) {
-      // TV remote: any arrow moves between the actions.
+    } else if (e.key === 'Enter' && target instanceof HTMLInputElement && target.type === 'checkbox') {
+      // OK on a remote toggles the checkbox, like Space does.
       e.preventDefault()
-      const buttons = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>('button') ?? [])
-      const i = buttons.indexOf(document.activeElement as HTMLButtonElement)
+      target.click()
+    } else if (e.key.startsWith('Arrow')) {
+      // TV remote: arrows move through the controls in reading order.
+      e.preventDefault()
+      const controls = Array.from(ref.current?.querySelectorAll<HTMLElement>('button, input') ?? [])
+      const i = controls.indexOf(target)
       const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1
-      buttons[Math.min(buttons.length - 1, Math.max(0, i + step))]?.focus()
+      controls[Math.min(controls.length - 1, Math.max(0, i + step))]?.focus()
     }
   }
 
@@ -89,15 +144,50 @@ export default function ProgrammeDialog({
 
   const at = `${dayPhrase(p.start, now)} at ${formatTime(p.start)} on ${channel.name}`
   const liveLabel = channel.streamUrl ? 'Watch channel live' : `Watch ${REAL_CHANNEL.name} live`
-  const reminder = kind === 'reminder'
-  const confirmed = reminder && stage === 'set'
+  const reminderFlow = kind === 'reminder' || kind === 'remove-reminder'
 
-  const liveButton = (primary: boolean) => (
-    <button type="button" className={`btn ${primary ? 'btn-primary' : 'btn-secondary'}`} onClick={onWatchLive}>
-      <span className="status-dot" aria-hidden="true" />
-      {liveLabel}
-    </button>
+  const disclaimer = (
+    <p className="dialog-note">
+      <Icon name="info" size="1.1em" />
+      {NOTIFICATIONS_DISCLAIMER}
+    </p>
   )
+
+  const methodOption = (key: keyof ReminderMethods, label: string) => (
+    <label className="method">
+      <input
+        type="checkbox"
+        checked={methods[key]}
+        onChange={(e) => setMethods((m) => ({ ...m, [key]: e.target.checked }))}
+      />
+      <span className="method-box" aria-hidden="true">
+        {methods[key] && <Icon name="check" size="0.8125rem" />}
+      </span>
+      {label}
+    </label>
+  )
+
+  let title: string
+  let text: string
+  if (stage === 'saved') {
+    title = `Reminder set · ${methodsLabel(methods)}`
+    text = `“${p.title}” starts ${at}.`
+  } else if (stage === 'remove-failed') {
+    title = 'The reminder could not be removed'
+    text = 'Please try again.'
+  } else if (stage === 'removed' || stage === 'removing') {
+    title = stage === 'removed' ? 'Reminder removed.' : 'Removing reminder…'
+    text = `“${p.title}” starts ${at}.`
+  } else if (kind === 'no-recording') {
+    title = 'No recording available'
+    text = `“${p.title}” aired ${dayPhrase(p.start, now)}, ${formatRange(p.start, p.end)}. No recording exists for it, so it cannot be played. The live channel can only be rewound by about 3 minutes.`
+  } else if (kind === 'no-stream') {
+    title = `${channel.name} has no stream`
+    text = `This is a demo channel used to fill the guide. Only ${REAL_CHANNEL.name} has a real live stream.`
+  } else {
+    title = 'This programme has not started yet.'
+    text = `“${p.title}” starts ${at}.`
+  }
 
   return (
     <dialog
@@ -115,60 +205,70 @@ export default function ProgrammeDialog({
         </p>
 
         <div className="dialog-message" aria-live="polite">
-          {confirmed ? (
-            <>
-              <h2 className="state-title dialog-title" id="programme-dialog-title">
-                <Icon name="check" size="1.1em" />
-                Reminder set
-              </h2>
-              <p className="state-text" id="programme-dialog-text">
-                You set a reminder for “{p.title}”, {at}.
-              </p>
-              <p className="dialog-note">
-                <Icon name="info" size="1.1em" />
-                {EMAIL_REMINDERS_CONNECTED
-                  ? 'An email reminder will be sent before the programme starts.'
-                  : 'Prototype: the reminder service is not connected yet, so no email has been scheduled or sent, and this reminder is kept only until the page is reloaded. Once the real reminder service is connected, an email reminder will be sent before the programme starts.'}
-              </p>
-            </>
-          ) : reminder ? (
-            <>
-              <h2 className="state-title" id="programme-dialog-title">
-                This programme has not started yet.
-              </h2>
-              <p className="state-text" id="programme-dialog-text">
-                “{p.title}” starts {at}.
-                {!channel.streamUrl && ' This is a demo channel, so there will be no stream to watch when it airs.'}
-              </p>
-              {stage === 'failed' && (
-                <p className="dialog-note" role="alert">
-                  <Icon name="info" size="1.1em" />
-                  The reminder could not be set. Please try again.
-                </p>
-              )}
-            </>
-          ) : (
-            <>
-              <h2 className="state-title" id="programme-dialog-title">
-                No recording available
-              </h2>
-              <p className="state-text" id="programme-dialog-text">
-                “{p.title}” aired {dayPhrase(p.start, now)}, {formatRange(p.start, p.end)}. No recording exists for
-                it, so it cannot be played. The live channel can only be rewound by about 3 minutes.
-              </p>
-            </>
-          )}
+          <h2 className="state-title dialog-title" id="programme-dialog-title">
+            {stage === 'saved' && <Icon name="check" size="1.1em" />}
+            {title}
+          </h2>
+          <p className="state-text" id="programme-dialog-text">
+            {text}
+          </p>
         </div>
 
+        {(stage === 'setup' || stage === 'saving') && (
+          <fieldset className="dialog-methods">
+            <legend>Remind me via</legend>
+            <div className="method-options">
+              {methodOption('email', 'Email')}
+              {methodOption('sms', 'SMS')}
+            </div>
+            {noMethod && (
+              <p className="dialog-error" role="alert">
+                Choose Email, SMS or both.
+              </p>
+            )}
+            {failed && (
+              <p className="dialog-error" role="alert">
+                The reminder could not be saved. Please try again.
+              </p>
+            )}
+          </fieldset>
+        )}
+
+        {reminderFlow && (stage === 'setup' || stage === 'saving' || stage === 'saved') && disclaimer}
+
         <div className="state-actions">
-          {reminder && !confirmed && (
-            <button type="button" className="btn btn-primary" onClick={confirmReminder} aria-disabled={stage === 'saving'}>
+          {(stage === 'setup' || stage === 'saving') && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              data-initial
+              onClick={save}
+              aria-disabled={noMethod || stage === 'saving'}
+            >
               <Icon name="bell" />
-              {stage === 'saving' ? 'Setting reminder…' : 'Set reminder'}
+              {stage === 'saving' ? 'Saving…' : 'Save reminder'}
             </button>
           )}
-          {liveButton(!reminder)}
-          <button type="button" className={`btn ${reminder && !confirmed ? 'btn-ghost' : 'btn-secondary'}`} data-back onClick={close}>
+          {stage === 'removed' && (
+            <button type="button" className="btn btn-primary" data-initial onClick={setUpAgain}>
+              <Icon name="bell" />
+              Set reminder
+            </button>
+          )}
+          <button
+            type="button"
+            className={`btn ${stage === 'info' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={onWatchLive}
+          >
+            <span className="status-dot" aria-hidden="true" />
+            {liveLabel}
+          </button>
+          <button
+            type="button"
+            className={`btn ${reminderFlow && stage !== 'saved' ? 'btn-ghost' : 'btn-secondary'}`}
+            data-initial={stage === 'saved' || stage === 'remove-failed' ? true : undefined}
+            onClick={close}
+          >
             <Icon name="guide" />
             Back to guide
           </button>

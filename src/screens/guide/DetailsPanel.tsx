@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import ChannelLogo from '../../components/ChannelLogo'
 import Icon from '../../components/Icon'
-import { REAL_CHANNEL } from '../../data/channels'
 import type { Channel } from '../../data/channels'
 import { availabilityOf, phaseOf } from '../../data/epg'
-import type { Availability, Programme } from '../../data/epg'
+import type { Programme } from '../../data/epg'
 import { formatDay, formatDuration, formatRange } from '../../lib/time'
 import { useMutedPreview } from '../../player/previewPlayers'
 
@@ -12,21 +11,9 @@ interface Props {
   programme: Programme
   channel: Channel
   now: number
-  reminderSet: boolean
-  /** The primary action; the guide decides whether it plays or explains. */
+  hasReminder: boolean
+  /** The primary action; the guide decides whether it plays or explains why it can't. */
   onActivate: () => void
-  onWatchLive: () => void
-}
-
-// The primary action follows the programme's time: on now = watch online, already aired =
-// watch the recording (or explain why there is none), not started = set a reminder.
-// Demo channels have nothing to play, so OK there opens the explanation instead.
-const ACTION: Record<Availability, string> = {
-  live: 'Watch online',
-  recording: 'Watch now',
-  'no-recording': 'Watch now',
-  upcoming: 'Set reminder',
-  demo: 'More info',
 }
 
 function statusLine(p: Programme, now: number): string {
@@ -34,15 +21,6 @@ function statusLine(p: Programme, now: number): string {
   if (phase === 'current') return `On now · ${formatDuration(p.end - now)} left`
   if (phase === 'upcoming') return `Starts in ${formatDuration(p.start - now)}`
   return `Ended ${formatDuration(now - p.end)} ago`
-}
-
-const NOTE: Record<Availability, string | null> = {
-  live: null,
-  recording:
-    'Prototype: plays the provided 30-second sample recording, not this programme. It is Widevine-protected and no licence server was provided, so playback is expected to fail.',
-  demo: 'Demo channel — no stream has been provided for it, so it cannot be played.',
-  'no-recording': 'No recording is available for this programme.',
-  upcoming: 'This programme has not started yet.',
 }
 
 // Rapid arrowing through the grid should not start and stop a video player each step.
@@ -55,14 +33,12 @@ function useDebounced<T>(value: T, ms: number): T {
   return v
 }
 
-export default function DetailsPanel({ programme: p, channel, now, reminderSet, onActivate, onWatchLive }: Props) {
+export default function DetailsPanel({ programme: p, channel, now, hasReminder, onActivate }: Props) {
   const avail = availabilityOf(p, channel, now)
   const phase = phaseOf(p, now)
   const progress = phase === 'current' ? (now - p.start) / (p.end - p.start) : 0
-  const note = NOTE[avail]
   // Reminders depend only on time, so they apply to demo channels too.
   const upcoming = phase === 'upcoming'
-  const label = upcoming ? (reminderSet ? 'Reminder set' : ACTION.upcoming) : ACTION[avail]
 
   // A muted preview is only possible where a real stream exists and is on air.
   const previewUrl = useDebounced(avail === 'live' ? (channel.streamUrl ?? null) : null, 350)
@@ -126,27 +102,11 @@ export default function DetailsPanel({ programme: p, channel, now, reminderSet, 
         <p className="details-desc">{p.description}</p>
 
         <div className="details-actions">
-          {avail === 'demo' && !upcoming ? (
-            <button type="button" data-nav="details" className="btn btn-secondary" onClick={onWatchLive}>
-              <span className="status-dot" aria-hidden="true" />
-              Watch {REAL_CHANNEL.name} live
-            </button>
-          ) : (
-            <button type="button" data-nav="details" className="btn btn-primary" onClick={onActivate}>
-              <Icon name={upcoming ? (reminderSet ? 'check' : 'bell') : 'play'} />
-              {label}
-            </button>
-          )}
-          <span className="details-hint">
-            <kbd>OK</kbd> {label}
-          </span>
+          <button type="button" data-nav="details" className="btn btn-primary" onClick={onActivate}>
+            <Icon name={upcoming ? (hasReminder ? 'bellOff' : 'bell') : 'play'} />
+            {upcoming ? (hasReminder ? 'Remove reminder' : 'Set reminder') : 'Watch now'}
+          </button>
         </div>
-        {note && (
-          <p className="details-note">
-            <Icon name="info" size="1.1em" />
-            {note}
-          </p>
-        )}
       </div>
     </section>
   )

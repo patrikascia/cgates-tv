@@ -5,6 +5,7 @@ import Icon from '../../components/Icon'
 import type { Channel } from '../../data/channels'
 import { availabilityOf, phaseOf } from '../../data/epg'
 import type { Programme } from '../../data/epg'
+import type { ReminderMethods } from '../../data/reminders'
 import { useNow } from '../../lib/time'
 import DetailsPanel from './DetailsPanel'
 import EpgGrid from './EpgGrid'
@@ -17,8 +18,10 @@ interface Props {
   load: GuideLoad
   initialFocusId: string | null
   onFocusChange: (id: string) => void
-  reminders: ReadonlySet<string>
-  onReminderSet: (programmeId: string) => void
+  /** Reminder delivery methods by programme id. */
+  reminders: ReadonlyMap<string, ReminderMethods>
+  onReminderSaved: (programmeId: string, methods: ReminderMethods) => void
+  onReminderRemoved: (programmeId: string) => void
   onOpen: (selection: Selection) => void
   onWatchLive: () => void
   onRetry: () => void
@@ -34,7 +37,8 @@ export default function GuideScreen({
   initialFocusId,
   onFocusChange,
   reminders,
-  onReminderSet,
+  onReminderSaved,
+  onReminderRemoved,
   onOpen,
   onWatchLive,
   onRetry,
@@ -57,20 +61,24 @@ export default function GuideScreen({
     [onFocusChange],
   )
 
-  // OK on a programme and the details panel's primary action. Only what can really play
+  // The details panel's primary action, and OK on a programme. Only what can really play
   // opens the player; the rest explains itself here, without leaving the guide.
-  // Demo channels go to the player, which explains that they have no stream.
+  // For a programme that already has a reminder, the button removes it while OK on the
+  // grid reopens its settings, so a stray OK never deletes anything.
   const activate = useCallback(
-    (p: Programme) => {
+    (p: Programme, from: 'button' | 'grid') => {
       const channel = channelById.get(p.channelId)
       if (!channel) return
       const t = Date.now()
-      if (phaseOf(p, t) === 'upcoming') setDialog({ kind: 'reminder', programme: p, channel })
-      else if (availabilityOf(p, channel, t) === 'no-recording') setDialog({ kind: 'no-recording', programme: p, channel })
+      const show = (kind: DialogKind) => setDialog({ kind, programme: p, channel })
+      if (phaseOf(p, t) === 'upcoming') show(from === 'button' && reminders.has(p.id) ? 'remove-reminder' : 'reminder')
+      else if (!channel.streamUrl) show('no-stream')
+      else if (availabilityOf(p, channel, t) === 'no-recording') show('no-recording')
       else onOpen({ channel, programme: p })
     },
-    [channelById, onOpen],
+    [channelById, reminders, onOpen],
   )
+  const activateFromGrid = useCallback((p: Programme) => activate(p, 'grid'), [activate])
 
   const closeDialog = useCallback(() => {
     setDialog(null)
@@ -135,9 +143,8 @@ export default function GuideScreen({
                 programme={shown}
                 channel={shownChannel}
                 now={now}
-                reminderSet={reminders.has(shown.id)}
-                onActivate={() => activate(shown)}
-                onWatchLive={onWatchLive}
+                hasReminder={reminders.has(shown.id)}
+                onActivate={() => activate(shown, 'button')}
               />
             )}
           </div>
@@ -148,7 +155,7 @@ export default function GuideScreen({
             selectedId={selected?.id ?? initialFocusId}
             onSelect={select}
             onHover={setHovered}
-            onOpen={activate}
+            onOpen={activateFromGrid}
             onExitUp={() => navItems('header')[0]?.focus()}
           />
           <footer className="key-hints" aria-hidden="true">
@@ -174,8 +181,9 @@ export default function GuideScreen({
               kind={dialog.kind}
               programme={dialog.programme}
               channel={dialog.channel}
-              reminderSet={reminders.has(dialog.programme.id)}
-              onReminderSet={onReminderSet}
+              reminder={reminders.get(dialog.programme.id) ?? null}
+              onReminderSaved={onReminderSaved}
+              onReminderRemoved={onReminderRemoved}
               onWatchLive={onWatchLive}
               onClose={closeDialog}
             />

@@ -3,6 +3,7 @@ import { REAL_CHANNEL } from './data/channels'
 import type { Channel } from './data/channels'
 import { fetchGuide } from './data/epg'
 import type { Guide, Programme } from './data/epg'
+import type { ReminderMethods } from './data/reminders'
 import GuideScreen from './screens/guide/GuideScreen'
 import PlayerScreen from './screens/player/PlayerScreen'
 
@@ -21,9 +22,21 @@ export default function App() {
   const [load, setLoad] = useState<GuideLoad>({ state: 'loading' })
   // Remembered so the guide restores focus to where the user left it.
   const [lastFocusId, setLastFocusId] = useState<string | null>(null)
-  // Programme ids with a reminder. Prototype: kept in memory only, see data/reminders.ts.
-  const [reminders, setReminders] = useState<ReadonlySet<string>>(() => new Set())
-  const addReminder = useCallback((id: string) => setReminders((prev) => new Set(prev).add(id)), [])
+  // Reminder delivery methods by programme id. Prototype: kept in memory only, see data/reminders.ts.
+  const [reminders, setReminders] = useState<ReadonlyMap<string, ReminderMethods>>(() => new Map())
+  const saveReminder = useCallback(
+    (id: string, methods: ReminderMethods) => setReminders((prev) => new Map(prev).set(id, methods)),
+    [],
+  )
+  const removeReminder = useCallback(
+    (id: string) =>
+      setReminders((prev) => {
+        const next = new Map(prev)
+        next.delete(id)
+        return next
+      }),
+    [],
+  )
 
   const loadGuide = useCallback(() => {
     fetchGuide().then(
@@ -66,7 +79,8 @@ export default function App() {
       initialFocusId={lastFocusId}
       onFocusChange={setLastFocusId}
       reminders={reminders}
-      onReminderSet={addReminder}
+      onReminderSaved={saveReminder}
+      onReminderRemoved={removeReminder}
       onOpen={openPlayer}
       onWatchLive={openLive}
       onRetry={retryGuide}

@@ -86,17 +86,6 @@
   overflow: hidden;
 }
 .details-actions { display: flex; align-items: center; gap: 1.25rem; margin-top: auto; padding-top: 1rem; }
-.details-hint { display: flex; align-items: center; gap: 0.5rem; color: var(--text-3); font-size: 0.8125rem; }
-.details-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  max-width: 50rem;
-  margin-top: 0.75rem;
-  color: var(--text-3);
-  font-size: 0.8125rem;
-}
-.details-note .icon { margin-top: 0.1em; }
 
 /* ---- Grid ---------------------------------------------------------------------- */
 .epg { position: relative; flex: 1; min-height: 0; background: var(--surface-0); }
@@ -317,6 +306,47 @@
   font-size: 0.875rem;
 }
 .dialog-note .icon { margin-top: 0.15em; }
+.dialog-error { color: #ff8a80; font-size: 0.875rem; font-weight: 600; }
+
+.dialog-methods { display: grid; gap: 0.625rem; margin: 0.25rem 0 0; padding: 0; border: 0; min-width: 0; }
+.dialog-methods legend { padding: 0; margin-bottom: 0.625rem; font-size: 0.875rem; font-weight: 600; color: var(--text-2); }
+.method-options { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.method {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  height: 2.75rem;
+  padding: 0 1.25rem 0 0.875rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: rgb(255 255 255 / 0.04);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  user-select: none;
+}
+/* The native checkbox stays focusable and clickable; it is drawn by .method-box. */
+.method input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.method-box {
+  display: grid;
+  place-items: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 0.25rem;
+  border: 1.5px solid var(--text-3);
+}
+.method:has(input:checked) { background: rgb(255 255 255 / 0.1); border-color: rgb(255 255 255 / 0.28); }
+.method:has(input:checked) .method-box { background: var(--text); border-color: var(--text); color: var(--focus-text); }
+.method:hover { background: rgb(255 255 255 / 0.16); }
+.method:has(input:focus-visible) {
+  background: var(--focus-bg);
+  color: var(--focus-text);
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--focus-bg);
+}
+.method:has(input:focus-visible) .method-box { border-color: var(--focus-text); }
+.method:has(input:checked:focus-visible) .method-box { background: var(--focus-text); color: var(--focus-bg); }
+.btn[aria-disabled='true'] { opacity: 0.5; cursor: default; }
 
 /* ---- Smaller viewports ------------------------------------------------------------ */
 @media (max-height: 820px) {
@@ -324,7 +354,6 @@
   .preview { height: 14rem; }
   .details-title { font-size: 2rem; }
   .details-desc { -webkit-line-clamp: 1; }
-  .details-note { display: none; }
 }
 @media (max-width: 900px) {
   :root { --pad-x: 1.25rem; }
