@@ -36,15 +36,17 @@ src/
 
 **Guide**
 
-- Arrows: move through programmes. Up/Down keep the same point in time across channels.
+- Arrows: move the selection; the preview card follows. Up/Down keep the same point in time across channels.
 - Page Up / Page Down: jump 5 channels.
 - Up from the first channel: header navigation.
-- Enter: **Watch now** for programmes on now or already aired, or the reminder settings for programmes that have not started. Anything that cannot play explains why in a dialog instead of opening the player.
+- Enter on the selected programme runs its action: **Watch now** for programmes on now or already aired, or the reminder settings for programmes that have not started. Anything that cannot play explains why in a dialog instead of opening the player.
 - The details panel button is **Watch now**, **Set reminder** or **Remove reminder**. Removing is only possible from this button, so a stray Enter in the grid never deletes a reminder.
 - In a dialog: arrows move between the controls, Enter or Space toggles a checkbox, and Esc / Backspace returns to the guide.
 - Esc / Backspace: return to what's on now.
 
-Hovering with the mouse updates the details panel but never leaves the guide.
+Mouse: the first click on a programme selects it and updates the preview card; clicking the selected programme again runs its action. Hovering only updates the preview card and never starts playback or opens a reminder.
+
+Keyboard focus is a green ring (CGates green, `#21b14b`); the selected programme has a green outline, filled while it has keyboard focus.
 
 **Player**
 

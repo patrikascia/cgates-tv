@@ -76,6 +76,8 @@
 .meter { width: 8rem; height: 3px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
 .meter span { display: block; height: 100%; background: var(--text); }
 .details-desc {
+  /* Reserves both lines so the action button keeps its place from programme to programme. */
+  min-height: 2.8em;
   margin-top: 0.75rem;
   max-width: 46rem;
   color: var(--text-2);
@@ -85,7 +87,8 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.details-actions { display: flex; align-items: center; gap: 1.25rem; margin-top: auto; padding-top: 1rem; }
+.details-actions { display: flex; align-items: center; gap: 1.25rem; margin-top: 1.5rem; }
+.details-actions .btn { height: 3rem; padding: 0 1.5rem 0 1.25rem; font-size: 1rem; }
 
 /* ---- Grid ---------------------------------------------------------------------- */
 .epg { position: relative; flex: 1; min-height: 0; background: var(--surface-0); }
@@ -252,36 +255,36 @@
 .phase-past .cell-meta { color: var(--text-3); }
 .phase-current { background: var(--surface-3); }
 
+/* Four distinct states: hover = lighter surface; selected (the programme in the preview
+   card, also while focus is in the header or the card) = green outline; keyboard focus =
+   light fill plus the green outline. */
 .cell:hover { background: #30343a; box-shadow: inset 0 0 0 1px var(--line-2); }
 .phase-past:hover { background: #24272c; }
-/* Remembered selection while focus is elsewhere (header, details actions). */
-.cell.is-selected { box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.6); }
-.cell:focus {
+.cell.is-selected { z-index: 1; box-shadow: inset 0 0 0 2px var(--brand); }
+.cell.is-selected .cell-title { color: var(--text); }
+.cell:focus-visible {
   z-index: 1;
   background: var(--focus-bg);
   color: var(--focus-text);
-  box-shadow: none;
+  box-shadow: inset 0 0 0 2px var(--brand);
 }
-.cell:focus .cell-title { color: var(--focus-text); font-weight: 650; }
-.cell:focus .cell-meta { color: #464a52; }
-.cell:focus .cell-progress { background: var(--focus-text); }
-.cell:focus .tag-rec { color: #85600f; }
+.cell:focus-visible .cell-title { color: var(--focus-text); font-weight: 650; }
+.cell:focus-visible .cell-meta { color: #464a52; }
+.cell:focus-visible .cell-progress { background: var(--focus-text); }
+.cell:focus-visible .tag-rec { color: #85600f; }
 
 /* ---- Footer / states ------------------------------------------------------------ */
-.key-hints {
+.guide-footer {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 2rem;
+  justify-content: flex-end;
   height: 2.75rem;
   padding: 0 var(--pad-x);
   border-top: 1px solid var(--line);
   color: var(--text-3);
   font-size: 0.8125rem;
 }
-.key-hints > span { display: flex; align-items: center; gap: 0.25rem; }
-.key-hints kbd { margin-right: 0.125rem; }
-.key-hints-note { margin-left: auto; }
 
 .guide-state { flex: 1; display: grid; place-items: center; padding: 2rem; }
 
@@ -339,13 +342,7 @@
 .method:has(input:checked) { background: rgb(255 255 255 / 0.1); border-color: rgb(255 255 255 / 0.28); }
 .method:has(input:checked) .method-box { background: var(--text); border-color: var(--text); color: var(--focus-text); }
 .method:hover { background: rgb(255 255 255 / 0.16); }
-.method:has(input:focus-visible) {
-  background: var(--focus-bg);
-  color: var(--focus-text);
-  box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--focus-bg);
-}
-.method:has(input:focus-visible) .method-box { border-color: var(--focus-text); }
-.method:has(input:checked:focus-visible) .method-box { background: var(--focus-text); color: var(--focus-bg); }
+.method:has(input:focus-visible) { background: rgb(255 255 255 / 0.14); box-shadow: var(--focus-ring); }
 .btn[aria-disabled='true'] { opacity: 0.5; cursor: default; }
 
 /* ---- Smaller viewports ------------------------------------------------------------ */
@@ -353,12 +350,13 @@
   .details-slot { height: 17rem; }
   .preview { height: 14rem; }
   .details-title { font-size: 2rem; }
-  .details-desc { -webkit-line-clamp: 1; }
+  .details-desc { -webkit-line-clamp: 1; min-height: 1.4em; }
+  .details-actions { margin-top: 1rem; }
 }
 @media (max-width: 900px) {
   :root { --pad-x: 1.25rem; }
   .guide-screen { --col: 11rem; }
-  .preview, .epg-channel .channel-logo, .key-hints-note { display: none; }
+  .preview, .epg-channel .channel-logo, .guide-footer { display: none; }
   .details { grid-template-columns: minmax(0, 1fr); }
   .app-header { gap: 1.25rem; }
 }

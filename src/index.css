@@ -15,6 +15,9 @@
   --rec: #d9a948;
   --focus-bg: #f4f5f7;
   --focus-text: #0a0b0d;
+  --brand: #21b14b; /* CGates green: keyboard focus, selection, current page */
+  /* Keyboard focus: a thin green ring, separated from the element by a dark gap. */
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--brand);
   --radius: 0.375rem;
   --pad-x: 3rem;
   --ease: cubic-bezier(0.2, 0, 0, 1);
@@ -65,13 +68,12 @@ kbd {
 .btn-primary { background: var(--text); color: var(--focus-text); }
 .btn-secondary { background: rgb(255 255 255 / 0.08); border-color: var(--line-2); }
 .btn-ghost { background: transparent; color: var(--text-2); padding: 0 1rem 0 0.75rem; }
+/* Hover (pointer) changes the fill only; keyboard focus adds the green ring. */
 .btn:hover { background: rgb(255 255 255 / 0.16); color: var(--text); }
-.btn-primary:hover { background: #fff; color: var(--focus-text); }
-.btn:focus-visible {
-  background: var(--focus-bg);
-  color: var(--focus-text);
-  box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--focus-bg);
-}
+.btn-primary:hover { background: #dff3e5; color: var(--focus-text); }
+.btn:focus-visible { box-shadow: var(--focus-ring); }
+.btn-secondary:focus-visible, .btn-ghost:focus-visible { background: rgb(255 255 255 / 0.14); color: var(--text); }
+.btn-primary:focus-visible { background: #fff; }
 
 /* ---- Small shared pieces ---------------------------------------------------- */
 .tag {
@@ -181,6 +183,7 @@ kbd {
 
 .app-nav { display: flex; gap: 0.25rem; }
 .nav-item {
+  position: relative;
   height: 2.5rem;
   padding: 0 1rem;
   border-radius: 999px;
@@ -188,9 +191,21 @@ kbd {
   font-weight: 600;
   font-size: 0.9375rem;
 }
-.nav-item[aria-current='page'] { color: var(--text); background: rgb(255 255 255 / 0.08); }
-.nav-item:hover { color: var(--text); }
-.nav-item:focus-visible { background: var(--focus-bg); color: var(--focus-text); }
+/* Current page: always shown, independent of hover and focus. The green bar sits on the
+   header's bottom edge, like a tab indicator. */
+.nav-item[aria-current='page'] { color: var(--text); }
+.nav-item[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: calc(-1rem - 1px);
+  height: 2px;
+  border-radius: 1px;
+  background: var(--brand);
+}
+.nav-item:hover { color: var(--text); background: rgb(255 255 255 / 0.08); }
+.nav-item:focus-visible { color: var(--text); background: rgb(255 255 255 / 0.08); box-shadow: var(--focus-ring); }
 
 .app-header-end { margin-left: auto; display: flex; align-items: center; gap: 2rem; }
 .clock { display: flex; align-items: baseline; gap: 0.625rem; font-variant-numeric: tabular-nums; }

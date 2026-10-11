@@ -1,5 +1,5 @@
 import { useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, KeyboardEvent, Ref } from 'react'
+import type { CSSProperties, KeyboardEvent, MouseEvent, Ref } from 'react'
 import ChannelLogo from '../../components/ChannelLogo'
 import { MIN, availabilityOf, phaseOf } from '../../data/epg'
 import type { Guide, Programme } from '../../data/epg'
@@ -17,6 +17,7 @@ interface Props {
   selectedId: string | null
   onSelect: (p: Programme) => void
   onHover: (p: Programme | null) => void
+  /** The programme's primary action: a second click, or OK on the selected programme. */
   onOpen: (p: Programme) => void
   onExitUp: () => void
 }
@@ -134,6 +135,22 @@ export default function EpgGrid({ ref, guide, now, selectedId, onSelect, onHover
       focusProgramme(p)
     }
   }, [geometry, index, rows, selectedId, currentOnRow, focusProgramme])
+
+  // Two-step activation: the first click selects (and previews) a programme, a click on
+  // the already-selected one runs its action. Pressing the pointer focuses the cell, and
+  // focus selects it, so "already selected" must be read before that, on pointerdown.
+  const pressedWasSelected = useRef(false)
+  const onCellClick = (e: MouseEvent<HTMLButtonElement>, p: Programme) => {
+    // detail is 0 for keyboard clicks (Enter/Space), which go to the focused cell.
+    const wasSelected = e.detail === 0 ? p.id === selectedId : pressedWasSelected.current
+    pressedWasSelected.current = false
+    if (wasSelected) {
+      onOpen(p)
+      return
+    }
+    focusProgramme(p)
+    anchor.current = Math.max(p.start, Math.min(timeAtViewLeft(), p.end - MIN))
+  }
 
   const onScroll = () => {
     const t = timeAtViewLeft()
@@ -264,8 +281,9 @@ export default function EpgGrid({ ref, guide, now, selectedId, onSelect, onHover
                       tabIndex={p.id === selectedId ? 0 : -1}
                       aria-label={`${p.title}, ${formatRange(p.start, p.end)}, ${status}`}
                       onPointerEnter={() => onHover(p)}
+                      onPointerDown={() => (pressedWasSelected.current = p.id === selectedId)}
                       onFocus={() => onSelect(p)}
-                      onClick={() => onOpen(p)}
+                      onClick={(e) => onCellClick(e, p)}
                     >
                       <span className="cell-inner">
                         <span className="cell-title">{p.title}</span>

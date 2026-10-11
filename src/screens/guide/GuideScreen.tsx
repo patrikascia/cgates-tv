@@ -158,22 +158,8 @@ export default function GuideScreen({
             onOpen={activateFromGrid}
             onExitUp={() => navItems('header')[0]?.focus()}
           />
-          <footer className="key-hints" aria-hidden="true">
-            <span>
-              <kbd>←</kbd>
-              <kbd>→</kbd>
-              <kbd>↑</kbd>
-              <kbd>↓</kbd> Browse
-            </span>
-            <span>
-              <kbd>OK</kbd> Open
-            </span>
-            <span>
-              <kbd>Back</kbd> Return to now
-            </span>
-            <span className="key-hints-note">
-              Schedules are demo data. Only {guide.channels[0].name} has a real stream.
-            </span>
+          <footer className="guide-footer">
+            Schedules are demo data. Only {guide.channels[0].name} has a real stream.
           </footer>
           {dialog && (
             <ProgrammeDialog
