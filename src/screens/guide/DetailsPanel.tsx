@@ -15,6 +15,7 @@ interface Props {
   hasReminder: boolean
   /** The primary action; the guide decides whether it plays or explains why it can't. */
   onActivate: () => void
+  onRecommendations: () => void
 }
 
 function statusLine(p: Programme, now: number): string {
@@ -34,7 +35,7 @@ function useDebounced<T>(value: T, ms: number): T {
   return v
 }
 
-export default function DetailsPanel({ programme: p, channel, now, hasReminder, onActivate }: Props) {
+export default function DetailsPanel({ programme: p, channel, now, hasReminder, onActivate, onRecommendations }: Props) {
   const avail = availabilityOf(p, channel, now)
   const phase = phaseOf(p, now)
   const progress = phase === 'current' ? (now - p.start) / (p.end - p.start) : 0
@@ -54,9 +55,26 @@ export default function DetailsPanel({ programme: p, channel, now, hasReminder, 
     if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) setPressed(true)
   }
 
+  const actionLabel = upcoming
+    ? hasReminder
+      ? 'Remove reminder'
+      : 'Set reminder'
+    : phase === 'past'
+      ? 'Watch recording'
+      : 'Watch now'
+
   return (
     <section className="details" aria-live="polite" aria-label="Programme details">
-      <div className={`preview preview-${wantsPreview ? previewStatus : 'none'}`}>
+      {/* The thumbnail runs the same action as the primary button. Reached with Left from
+          that button (not with Tab), or clicked. */}
+      <button
+        type="button"
+        data-nav="details-thumb"
+        tabIndex={-1}
+        className={`preview preview-${wantsPreview ? previewStatus : 'none'}`}
+        aria-label={`${actionLabel}: ${p.title}`}
+        onClick={onActivate}
+      >
         <video ref={videoRef} muted playsInline aria-hidden="true" />
         {wantsPreview && previewStatus === 'playing' && <span className="preview-badge">Live preview · muted</span>}
         {wantsPreview && previewStatus !== 'playing' && previewStatus !== 'error' && (
@@ -79,7 +97,7 @@ export default function DetailsPanel({ programme: p, channel, now, hasReminder, 
             </span>
           </span>
         )}
-      </div>
+      </button>
 
       <div className="details-body">
         <p className="details-channel">
@@ -120,13 +138,19 @@ export default function DetailsPanel({ programme: p, channel, now, hasReminder, 
             onBlur={() => setPressed(false)}
           >
             <Icon name={upcoming ? (hasReminder ? 'bellOff' : 'bell') : 'play'} />
-            {upcoming
-              ? hasReminder
-                ? 'Remove reminder'
-                : 'Set reminder'
-              : phase === 'past'
-                ? 'Watch recording'
-                : 'Watch now'}
+            {actionLabel}
+          </button>
+          {/* Reached with Right from the primary button (not with Tab), or clicked. */}
+          <button
+            type="button"
+            data-nav="details-recs"
+            tabIndex={-1}
+            className="btn btn-primary"
+            aria-haspopup="dialog"
+            onClick={onRecommendations}
+          >
+            <Icon name="sparkles" />
+            Recommendations
           </button>
         </div>
       </div>

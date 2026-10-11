@@ -15,6 +15,7 @@ import DetailsPanel from './DetailsPanel'
 import EpgGrid from './EpgGrid'
 import type { EpgGridHandle } from './EpgGrid'
 import ProgrammeDialog from './ProgrammeDialog'
+import RecommendationsDialog from './RecommendationsDialog'
 import type { DialogKind } from './ProgrammeDialog'
 import './guide.css'
 
@@ -47,6 +48,11 @@ const focusAction = () => {
   const el = navItems('details')[0] ?? navItems('header')[0]
   el?.focus()
 }
+// The preview card's row: [thumbnail] … [primary action] [Recommendations]. The
+// thumbnail and Recommendations are reached only from the primary action (Left / Right).
+const actionRow = (nav: 'details' | 'details-recs' | 'details-thumb') =>
+  document.querySelector<HTMLElement>(`[data-nav="${nav}"]`)
+
 // Entering the filter row lands on the active category.
 const focusFilters = () => {
   const el =
@@ -85,7 +91,10 @@ export default function GuideScreen({
   const [input, setInput] = useState<'keyboard' | 'pointer'>('keyboard')
   const [zone, setZone] = useState<Zone>('grid')
   const [dialog, setDialog] = useState<Dialog | null>(null)
-  const dialogOpen = dialog !== null
+  // Recommendations popup (mock picks) and the card chosen in it.
+  const [recsOpen, setRecsOpen] = useState(false)
+  const [pickedRec, setPickedRec] = useState<number | null>(null)
+  const dialogOpen = dialog !== null || recsOpen
 
   const guide = load.state === 'ready' ? load.guide : null
   // The user's own channel order (drag and drop), saved in this browser.
@@ -147,7 +156,7 @@ export default function GuideScreen({
     const onDown = () => setInput('pointer')
     const onFocusIn = (e: FocusEvent) => {
       const t = e.target as HTMLElement
-      setZone(t.dataset?.id ? 'grid' : t.dataset?.nav === 'details' ? 'details' : 'other')
+      setZone(t.dataset?.id ? 'grid' : t.dataset?.nav?.startsWith('details') ? 'details' : 'other')
     }
     window.addEventListener('keydown', onKey, true)
     window.addEventListener('pointermove', onMove, true)
@@ -219,6 +228,18 @@ export default function GuideScreen({
         }
         return
       }
+      // The preview card's controls: Up = active category, Down = the selected programme,
+      // Left/Right only within [thumbnail] [primary action] [Recommendations].
+      if (group.startsWith('details') && e.key.startsWith('Arrow')) {
+        e.preventDefault()
+        if (e.key === 'ArrowUp') focusFilters()
+        else if (e.key === 'ArrowDown')
+          gridRef.current?.focus(document.querySelector<HTMLElement>('.cell.is-selected')?.dataset.id)
+        else if (group === 'details') actionRow(e.key === 'ArrowRight' ? 'details-recs' : 'details-thumb')?.focus()
+        else if (group === 'details-recs' && e.key === 'ArrowLeft') actionRow('details')?.focus()
+        else if (group === 'details-thumb' && e.key === 'ArrowRight') actionRow('details')?.focus()
+        return
+      }
       const list = navItems(group)
       const i = list.indexOf(active!)
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -279,6 +300,7 @@ export default function GuideScreen({
                 now={now}
                 hasReminder={reminders.has(shown.id)}
                 onActivate={() => activate(shown, 'button')}
+                onRecommendations={() => setRecsOpen(true)}
               />
             )}
           </div>
@@ -299,6 +321,16 @@ export default function GuideScreen({
           <footer className="guide-footer">
             Schedules are demo data. Only {REAL_CHANNEL.name} has a real stream.
           </footer>
+          {recsOpen && (
+            <RecommendationsDialog
+              picked={pickedRec}
+              onPick={setPickedRec}
+              onClose={() => {
+                setRecsOpen(false)
+                actionRow('details-recs')?.focus()
+              }}
+            />
+          )}
           {dialog && (
             <ProgrammeDialog
               key={dialog.programme.id}

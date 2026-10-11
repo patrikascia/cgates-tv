@@ -12,6 +12,7 @@ const PATHS = {
   bell: 'M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 21h4',
   check: 'M5 12.5 9.5 17 19 7.5',
   bellOff: 'M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 21h4M4 4l16 16',
+  sparkles: 'M10 3.5 11.6 8.4 16.5 10 11.6 11.6 10 16.5 8.4 11.6 3.5 10 8.4 8.4zM18 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8zM17.5 3.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z',
   // Guide category filters
   all: 'M4.5 4.5h6v6h-6zM13.5 4.5h6v6h-6zM4.5 13.5h6v6h-6zM13.5 13.5h6v6h-6z',
   music: 'M9 17.5V6l10-2v11.5M9 17.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM19 15.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z',
@@ -22,7 +23,7 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS
 
-const STROKED: ReadonlySet<IconName> = new Set(['back', 'volume', 'mute', 'retry', 'info', 'bell', 'check', 'bellOff', 'all', 'music', 'history', 'sport', 'movies'])
+const STROKED: ReadonlySet<IconName> = new Set(['back', 'volume', 'mute', 'retry', 'info', 'bell', 'check', 'bellOff', 'all', 'music', 'history', 'sport', 'movies', 'sparkles'])
 
 export default function Icon({ name, size = '1.25em' }: { name: IconName; size?: string }) {
   const stroked = STROKED.has(name)

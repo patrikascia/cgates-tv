@@ -40,34 +40,66 @@ const INITIAL: PlayerState = {
   presentationStart: null,
 }
 
+// Licence server for Widevine-protected streams (the recordings). None was provided for
+// this prototype, so it is empty and protected recordings cannot be decrypted. Set it in
+// .env.local once CGates supplies one; see README.
+const WIDEVINE_LICENSE_URL: string = import.meta.env.VITE_WIDEVINE_LICENSE_URL ?? ''
+
+const { Code, Category } = shaka.util.Error
+
+/** "Shaka error 6012 (NO_LICENSE_SERVER_GIVEN)" */
+function technical(e: shaka.util.Error): string {
+  const name = Object.entries(Code).find(([, v]) => v === e.code)?.[0]
+  return `Shaka error ${e.code}${name ? ` (${name})` : ''}`
+}
+
+/** HTTP status from a network error, also when it is nested in a DRM licence error. */
+function httpStatus(e: shaka.util.Error | undefined): number | null {
+  if (!e) return null
+  if (e.code === Code.BAD_HTTP_STATUS && typeof e.data?.[1] === 'number') return e.data[1]
+  return e.data?.[0] instanceof shaka.util.Error ? httpStatus(e.data[0]) : null
+}
+
+/** Turns a Shaka error into a message that names the actual cause. */
 function describeError(err: unknown, kind: SourceKind): PlayerError {
   const e = err as shaka.util.Error
   const label = kind === 'live' ? 'live stream' : 'recording'
-  if (e?.category === shaka.util.Error.Category.DRM) {
+  if (!(e instanceof shaka.util.Error)) {
+    return { title: `The ${label} could not be played`, detail: String((err as Error)?.message ?? err) }
+  }
+  const tech = technical(e)
+  const status = httpStatus(e)
+  if (e.category === Category.DRM) {
+    if (e.code === Code.NO_LICENSE_SERVER_GIVEN) {
+      return {
+        title: `This ${label} is copy-protected`,
+        detail: `It is encrypted with Widevine DRM, and no licence server is configured for this app, so it cannot be decrypted. ${tech}.`,
+      }
+    }
+    if (e.code === Code.REQUESTED_KEY_SYSTEM_CONFIG_UNAVAILABLE || e.code === Code.MISSING_EME_SUPPORT) {
+      return {
+        title: `This browser cannot decrypt the ${label}`,
+        detail: `It is encrypted with Widevine DRM, which this browser does not offer (Chrome, Edge and Firefox do; Safari does not). A licence server is also required. ${tech}.`,
+      }
+    }
+    if (e.code === Code.LICENSE_REQUEST_FAILED) {
+      return {
+        title: 'The licence server refused the request',
+        detail: `The ${label} could not be decrypted${status ? ` (HTTP ${status})` : ''}. The licence server may require authorisation. ${tech}.`,
+      }
+    }
+    return { title: `The ${label} could not be decrypted`, detail: `${tech}.` }
+  }
+  if (e.category === Category.NETWORK) {
     return {
-      title: 'This recording is copy-protected',
-      detail:
-        'The stream uses Widevine DRM. No licence server was provided for this prototype, ' +
-        'or this browser cannot play Widevine (try Chrome or Edge). ' +
-        `Technical code: ${e.code}.`,
+      title: `Could not load the ${label}`,
+      detail: `${status ? `The server answered HTTP ${status}. ` : 'Check your internet connection; the server may also be blocking this request. '}${tech}.`,
     }
   }
-  if (e?.category === shaka.util.Error.Category.NETWORK) {
-    return {
-      title: `Could not reach the ${label}`,
-      detail: `Check your internet connection. The server may also be blocking this request. Technical code: ${e.code}.`,
-    }
+  if (e.category === Category.MANIFEST) {
+    return { title: `The ${label} could not be read`, detail: `The stream description is missing or invalid. ${tech}.` }
   }
-  if (e?.category === shaka.util.Error.Category.MANIFEST) {
-    return {
-      title: `The ${label} could not be read`,
-      detail: `The stream description is missing or invalid. Technical code: ${e.code}.`,
-    }
-  }
-  return {
-    title: `The ${label} could not be played`,
-    detail: e?.code ? `Technical code: ${e.code}.` : String((err as Error)?.message ?? err),
-  }
+  return { title: `The ${label} could not be played`, detail: `${tech}.` }
 }
 
 export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: Source) {
@@ -102,6 +134,7 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
 
     const player = new shaka.Player()
     playerRef.current = player
+    if (WIDEVINE_LICENSE_URL) player.configure({ drm: { servers: { 'com.widevine.alpha': WIDEVINE_LICENSE_URL } } })
     queueMicrotask(() => {
       if (!cancelled) setState((s) => ({ ...INITIAL, volume: s.volume, muted: s.muted }))
     })
@@ -122,19 +155,26 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
     }
 
     // A stream that neither plays nor fails must not leave the user on a spinner forever.
+    // This only covers silent stalls: any real error cancels it and is shown as is.
     const loadTimeout = window.setTimeout(() => {
       if (cancelled || video.readyState >= 3) return
-      patch({
-        status: 'error',
-        error: {
-          title: `The ${source.kind === 'live' ? 'live stream' : 'recording'} is not responding`,
-          detail:
-            source.kind === 'recording'
-              ? 'Playback did not start within 20 seconds. Protected recordings need a DRM licence, which this prototype does not have.'
-              : 'Playback did not start within 20 seconds. Check your connection and try again.',
-        },
-      })
+      setState((s) =>
+        s.status === 'error'
+          ? s
+          : {
+              ...s,
+              status: 'error',
+              error: {
+                title: `The ${source.kind === 'live' ? 'live stream' : 'recording'} is not responding`,
+                detail: 'Playback did not start within 20 seconds and the player reported no error. Check your connection and try again.',
+              },
+            },
+      )
     }, 20_000)
+    const fail = (err: unknown) => {
+      window.clearTimeout(loadTimeout)
+      patch({ status: 'error', error: describeError(err, source.kind) })
+    }
 
     const onPlaying = () => {
       window.clearTimeout(loadTimeout)
@@ -144,8 +184,7 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
     const onPause = () => !video.ended && patch({ status: 'paused' })
     const onWaiting = () => patch({ status: 'buffering' })
     const onEnded = () => patch({ status: 'ended' })
-    const onShakaError = (e: Event) =>
-      patch({ status: 'error', error: describeError((e as CustomEvent).detail, source.kind) })
+    const onShakaError = (e: Event) => fail((e as CustomEvent).detail)
 
     video.addEventListener('playing', onPlaying)
     video.addEventListener('pause', onPause)
@@ -168,8 +207,8 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
       .catch((err: unknown) => {
         if (cancelled) return
         // 7000 = LOAD_INTERRUPTED (we switched source), not a real failure.
-        if ((err as shaka.util.Error)?.code === 7000) return
-        patch({ status: 'error', error: describeError(err, source.kind) })
+        if ((err as shaka.util.Error)?.code === Code.LOAD_INTERRUPTED) return
+        fail(err)
       })
 
     return () => {
