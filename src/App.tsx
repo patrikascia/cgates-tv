@@ -20,8 +20,8 @@ type Screen = { name: 'guide' } | { name: 'player'; selection: Selection }
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'guide' })
   const [load, setLoad] = useState<GuideLoad>({ state: 'loading' })
-  // Remembered so the guide restores focus to where the user left it.
-  const [lastFocusId, setLastFocusId] = useState<string | null>(null)
+  // Remembered so the guide restores the selection (and focus) to where the user left it.
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null)
   // Reminder delivery methods by programme id. Prototype: kept in memory only, see data/reminders.ts.
   const [reminders, setReminders] = useState<ReadonlyMap<string, ReminderMethods>>(() => new Map())
   const saveReminder = useCallback(
@@ -52,8 +52,18 @@ export default function App() {
 
   useEffect(loadGuide, [loadGuide])
 
+  // A held Enter / Space auto-repeats. Only the first press may activate anything, or one
+  // long press would open a dialog and then also press the button that receives focus.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat && (e.key === 'Enter' || e.key === ' ')) e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
+
   const openPlayer = useCallback((selection: Selection) => {
-    if (selection.programme) setLastFocusId(selection.programme.id)
+    if (selection.programme) setLastSelectedId(selection.programme.id)
     setScreen({ name: 'player', selection })
   }, [])
 
@@ -76,8 +86,8 @@ export default function App() {
   return (
     <GuideScreen
       load={load}
-      initialFocusId={lastFocusId}
-      onFocusChange={setLastFocusId}
+      initialSelectedId={lastSelectedId}
+      onSelectionChange={setLastSelectedId}
       reminders={reminders}
       onReminderSaved={saveReminder}
       onReminderRemoved={removeReminder}

@@ -89,6 +89,13 @@
 }
 .details-actions { display: flex; align-items: center; gap: 1.25rem; margin-top: 1.5rem; }
 .details-actions .btn { height: 3rem; padding: 0 1.5rem 0 1.25rem; font-size: 1rem; }
+/* Preview card action: neutral border at rest, green border on hover, green border and
+   ring on keyboard focus, green fill only while pressed. */
+.btn.action-btn { border: 2px solid #8a9099; }
+.btn.action-btn:hover { background: var(--text); border-color: var(--brand); }
+.btn.action-btn:focus-visible { background: #fff; border-color: var(--brand); box-shadow: var(--focus-ring); }
+.btn.action-btn:active,
+.btn.action-btn.is-pressed { background: var(--brand); border-color: var(--brand); color: var(--focus-text); }
 
 /* ---- Grid ---------------------------------------------------------------------- */
 .epg { position: relative; flex: 1; min-height: 0; background: var(--surface-0); }
@@ -255,23 +262,24 @@
 .phase-past .cell-meta { color: var(--text-3); }
 .phase-current { background: var(--surface-3); }
 
-/* Four distinct states: hover = lighter surface; selected (the programme in the preview
-   card, also while focus is in the header or the card) = green outline; keyboard focus =
-   light fill plus the green outline. */
-.cell:hover { background: #30343a; box-shadow: inset 0 0 0 1px var(--line-2); }
-.phase-past:hover { background: #24272c; }
-.cell.is-selected { z-index: 1; box-shadow: inset 0 0 0 2px var(--brand); }
-.cell.is-selected .cell-title { color: var(--text); }
-.cell:focus-visible {
-  z-index: 1;
-  background: var(--focus-bg);
-  color: var(--focus-text);
-  box-shadow: inset 0 0 0 2px var(--brand);
-}
-.cell:focus-visible .cell-title { color: var(--focus-text); font-weight: 650; }
-.cell:focus-visible .cell-meta { color: #464a52; }
-.cell:focus-visible .cell-progress { background: var(--focus-text); }
-.cell:focus-visible .tag-rec { color: #85600f; }
+/* States:
+   - hover (mouse in use)  = thin green outline
+   - keyboard focus        = 2px green outline on a lifted surface
+   - selected (confirmed)  = green fill, dark text; stays visible wherever focus is
+   - selected + focused    = green fill with a dark inner ring
+   Hover outlines are off while the keyboard is in use, so a resting cursor never
+   competes with keyboard focus. */
+.guide-screen[data-input='pointer'] .cell:hover { background: #30343a; box-shadow: inset 0 0 0 1px var(--brand); }
+.guide-screen[data-input='pointer'] .phase-past:hover { background: #24272c; }
+.cell:focus-visible { z-index: 1; background: #30343a; box-shadow: inset 0 0 0 2px var(--brand); }
+.cell:focus-visible .cell-title { color: var(--text); font-weight: 650; }
+.cell.is-selected,
+.guide-screen[data-input='pointer'] .cell.is-selected:hover { z-index: 1; background: var(--brand); box-shadow: none; }
+.cell.is-selected .cell-title { color: var(--focus-text); font-weight: 650; }
+.cell.is-selected .cell-meta { color: rgb(10 11 13 / 0.78); }
+.cell.is-selected .cell-progress { background: var(--focus-text); }
+.cell.is-selected .tag-rec { color: var(--focus-text); }
+.cell.is-selected:focus-visible { box-shadow: inset 0 0 0 2px var(--brand), inset 0 0 0 4px var(--focus-text); }
 
 /* ---- Footer / states ------------------------------------------------------------ */
 .guide-footer {

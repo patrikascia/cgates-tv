@@ -6,7 +6,7 @@ import type { Guide, Programme } from '../../data/epg'
 import { formatDay, formatRange, formatTime } from '../../lib/time'
 
 export interface EpgGridHandle {
-  /** Focus the selected programme (or the one on air on the first channel). */
+  /** Focus the focused programme, else the selected one, else what is on air on the first channel. */
   focus: () => void
 }
 
@@ -14,11 +14,17 @@ interface Props {
   ref?: Ref<EpgGridHandle>
   guide: Guide
   now: number
+  /** Keyboard target (roving tabindex). Moves with the arrow keys. */
+  focusedId: string | null
+  /** Confirmed selection. Changes only on click or Enter. */
   selectedId: string | null
+  onFocusProgramme: (p: Programme) => void
   onSelect: (p: Programme) => void
   onHover: (p: Programme | null) => void
-  /** The programme's primary action: a second click, or OK on the selected programme. */
+  /** Click on the already-selected programme: shortcut for its primary action. */
   onOpen: (p: Programme) => void
+  /** Enter / OK on the already-selected programme: move on to its primary action. */
+  onEnterSelected: (p: Programme) => void
   onExitUp: () => void
 }
 
@@ -27,7 +33,19 @@ const PAGE_ROWS = 5
 
 type Pos = { row: number; col: number }
 
-export default function EpgGrid({ ref, guide, now, selectedId, onSelect, onHover, onOpen, onExitUp }: Props) {
+export default function EpgGrid({
+  ref,
+  guide,
+  now,
+  focusedId,
+  selectedId,
+  onFocusProgramme,
+  onSelect,
+  onHover,
+  onOpen,
+  onEnterSelected,
+  onExitUp,
+}: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const cornerRef = useRef<HTMLDivElement>(null)
   const nowLineRef = useRef<HTMLDivElement>(null)
@@ -85,7 +103,7 @@ export default function EpgGrid({ ref, guide, now, selectedId, onSelect, onHover
 
   const focusProgramme = useCallback(
     (p: Programme) => {
-      onSelect(p)
+      onFocusProgramme(p)
       // Focus synchronously: the cell is already rendered, only its classes change.
       const el = cellEl(p.id)
       if (el) {
@@ -93,7 +111,7 @@ export default function EpgGrid({ ref, guide, now, selectedId, onSelect, onHover
         reveal(el)
       }
     },
-    [onSelect, reveal],
+    [onFocusProgramme, reveal],
   )
 
   const pickAt = useCallback(
@@ -111,11 +129,12 @@ export default function EpgGrid({ ref, guide, now, selectedId, onSelect, onHover
     ref,
     () => ({
       focus: () => {
-        const p = (selectedId && rows.flat().find((x) => x.id === selectedId)) || currentOnRow(0)
+        const target = focusedId ?? selectedId
+        const p = (target && rows.flat().find((x) => x.id === target)) || currentOnRow(0)
         if (p) focusProgramme(p)
       },
     }),
-    [selectedId, rows, currentOnRow, focusProgramme],
+    [focusedId, selectedId, rows, currentOnRow, focusProgramme],
   )
 
   // Initial position: "now" a little in from the left edge, then the selected programme.
@@ -128,26 +147,25 @@ export default function EpgGrid({ ref, guide, now, selectedId, onSelect, onHover
     initialised.current = true
     const { col, pxPerMin } = geometry()
     sc.scrollLeft = line.offsetLeft - col - 40 * pxPerMin
-    const pos = selectedId ? index.get(selectedId) : undefined
+    const startId = focusedId ?? selectedId
+    const pos = startId ? index.get(startId) : undefined
     const p = pos ? rows[pos.row][pos.col] : currentOnRow(0)
     if (p) {
       anchor.current = Math.max(p.start, Date.now())
       focusProgramme(p)
     }
-  }, [geometry, index, rows, selectedId, currentOnRow, focusProgramme])
+  }, [geometry, index, rows, focusedId, selectedId, currentOnRow, focusProgramme])
 
-  // Two-step activation: the first click selects (and previews) a programme, a click on
-  // the already-selected one runs its action. Pressing the pointer focuses the cell, and
-  // focus selects it, so "already selected" must be read before that, on pointerdown.
-  const pressedWasSelected = useRef(false)
+  // Mouse: the first click selects (and previews) a programme; a click on the
+  // already-selected one is a shortcut for its primary action. Focusing never selects,
+  // so the selection read here is the one from before this click.
   const onCellClick = (e: MouseEvent<HTMLButtonElement>, p: Programme) => {
-    // detail is 0 for keyboard clicks (Enter/Space), which go to the focused cell.
-    const wasSelected = e.detail === 0 ? p.id === selectedId : pressedWasSelected.current
-    pressedWasSelected.current = false
-    if (wasSelected) {
+    if (e.detail === 0) return // keyboard "clicks" are handled in onKeyDown
+    if (p.id === selectedId) {
       onOpen(p)
       return
     }
+    onSelect(p)
     focusProgramme(p)
     anchor.current = Math.max(p.start, Math.min(timeAtViewLeft(), p.end - MIN))
   }
@@ -163,6 +181,17 @@ export default function EpgGrid({ ref, guide, now, selectedId, onSelect, onHover
     if (!pos) return
     let next: Programme | undefined
     switch (e.key) {
+      case 'Enter':
+      case ' ': {
+        // Keyboard: the first Enter confirms the selection, the next one moves on to the
+        // preview card's action. Enter in the grid never starts playback by itself.
+        e.preventDefault()
+        if (e.repeat) return
+        const p = rows[pos.row][pos.col]
+        if (p.id === selectedId) onEnterSelected(p)
+        else onSelect(p)
+        return
+      }
       case 'ArrowRight':
       case 'ArrowLeft': {
         next = rows[pos.row][pos.col + (e.key === 'ArrowRight' ? 1 : -1)]
@@ -278,11 +307,11 @@ export default function EpgGrid({ ref, guide, now, selectedId, onSelect, onHover
                       data-id={p.id}
                       className={`cell phase-${phase}${p.id === selectedId ? ' is-selected' : ''}`}
                       style={{ '--x': x, '--w': w, '--progress': progress } as CSSProperties}
-                      tabIndex={p.id === selectedId ? 0 : -1}
+                      tabIndex={p.id === (focusedId ?? selectedId) ? 0 : -1}
                       aria-label={`${p.title}, ${formatRange(p.start, p.end)}, ${status}`}
+                      aria-pressed={p.id === selectedId}
                       onPointerEnter={() => onHover(p)}
-                      onPointerDown={() => (pressedWasSelected.current = p.id === selectedId)}
-                      onFocus={() => onSelect(p)}
+                      onFocus={() => onFocusProgramme(p)}
                       onClick={(e) => onCellClick(e, p)}
                     >
                       <span className="cell-inner">

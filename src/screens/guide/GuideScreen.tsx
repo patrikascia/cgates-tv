@@ -16,8 +16,9 @@ import './guide.css'
 
 interface Props {
   load: GuideLoad
-  initialFocusId: string | null
-  onFocusChange: (id: string) => void
+  /** Programme to select and focus on arrival, e.g. the one just watched. */
+  initialSelectedId: string | null
+  onSelectionChange: (id: string) => void
   /** Reminder delivery methods by programme id. */
   reminders: ReadonlyMap<string, ReminderMethods>
   onReminderSaved: (programmeId: string, methods: ReminderMethods) => void
@@ -32,10 +33,18 @@ type Dialog = { kind: DialogKind; programme: Programme; channel: Channel }
 const navItems = (group: string) =>
   Array.from(document.querySelectorAll<HTMLElement>(`[data-nav="${group}"]:not(:disabled)`))
 
+// Arrow keys run one vertical path: header -> preview card action -> programme grid.
+const focusAction = () => {
+  const el = navItems('details')[0] ?? navItems('header')[0]
+  el?.focus()
+}
+
+type Zone = 'grid' | 'details' | 'other'
+
 export default function GuideScreen({
   load,
-  initialFocusId,
-  onFocusChange,
+  initialSelectedId,
+  onSelectionChange,
   reminders,
   onReminderSaved,
   onReminderRemoved,
@@ -45,21 +54,62 @@ export default function GuideScreen({
 }: Props) {
   const now = useNow(15_000)
   const gridRef = useRef<EpgGridHandle>(null)
-  const [selected, setSelected] = useState<Programme | null>(null)
+  // Three separate targets: keyboard focus, mouse hover and the confirmed selection.
+  const [focusedId, setFocusedId] = useState<string | null>(initialSelectedId)
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId)
   const [hovered, setHovered] = useState<Programme | null>(null)
+  // Which input the user is using right now, and where focus is. Together they decide
+  // which programme the preview card shows.
+  const [input, setInput] = useState<'keyboard' | 'pointer'>('keyboard')
+  const [zone, setZone] = useState<Zone>('grid')
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const dialogOpen = dialog !== null
+  const dialogReturn = useRef<HTMLElement | null>(null)
 
   const guide = load.state === 'ready' ? load.guide : null
   const channelById = useMemo(() => new Map(guide?.channels.map((c) => [c.id, c])), [guide])
+  const programmeById = useMemo(
+    () => new Map(Object.values(guide?.programmes ?? {}).flatMap((list) => list.map((p) => [p.id, p]))),
+    [guide],
+  )
 
+  const focusProgramme = useCallback((p: Programme) => setFocusedId(p.id), [])
   const select = useCallback(
     (p: Programme) => {
-      setSelected(p)
-      onFocusChange(p.id)
+      setSelectedId(p.id)
+      onSelectionChange(p.id)
     },
-    [onFocusChange],
+    [onSelectionChange],
   )
+
+  useEffect(() => {
+    const onKey = () => setInput('keyboard')
+    // Only real pointer movement counts: browsers also send pointer events when the
+    // grid scrolls under a resting cursor, which must not take over from the keyboard.
+    let lastX = NaN
+    let lastY = NaN
+    const onMove = (e: PointerEvent) => {
+      if (e.clientX === lastX && e.clientY === lastY) return
+      lastX = e.clientX
+      lastY = e.clientY
+      setInput('pointer')
+    }
+    const onDown = () => setInput('pointer')
+    const onFocusIn = (e: FocusEvent) => {
+      const t = e.target as HTMLElement
+      setZone(t.dataset?.id ? 'grid' : t.dataset?.nav === 'details' ? 'details' : 'other')
+    }
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('pointermove', onMove, true)
+    window.addEventListener('pointerdown', onDown, true)
+    document.addEventListener('focusin', onFocusIn)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('pointermove', onMove, true)
+      window.removeEventListener('pointerdown', onDown, true)
+      document.removeEventListener('focusin', onFocusIn)
+    }
+  }, [])
 
   // The details panel's primary action, and OK on a programme. Only what can really play
   // opens the player; the rest explains itself here, without leaving the guide.
@@ -70,7 +120,10 @@ export default function GuideScreen({
       const channel = channelById.get(p.channelId)
       if (!channel) return
       const t = Date.now()
-      const show = (kind: DialogKind) => setDialog({ kind, programme: p, channel })
+      const show = (kind: DialogKind) => {
+        dialogReturn.current = document.activeElement as HTMLElement | null
+        setDialog({ kind, programme: p, channel })
+      }
       if (phaseOf(p, t) === 'upcoming') show(from === 'button' && reminders.has(p.id) ? 'remove-reminder' : 'reminder')
       else if (!channel.streamUrl) show('no-stream')
       else if (availabilityOf(p, channel, t) === 'no-recording') show('no-recording')
@@ -80,9 +133,13 @@ export default function GuideScreen({
   )
   const activateFromGrid = useCallback((p: Programme) => activate(p, 'grid'), [activate])
 
+  // Back to whatever opened the dialog: the preview card's button or the programme.
   const closeDialog = useCallback(() => {
     setDialog(null)
-    gridRef.current?.focus()
+    const el = dialogReturn.current
+    dialogReturn.current = null
+    if (el?.isConnected && el !== document.body) el.focus()
+    else gridRef.current?.focus()
   }, [])
 
   // Arrow keys outside the grid: header row <-> details actions <-> grid.
@@ -90,6 +147,8 @@ export default function GuideScreen({
   useEffect(() => {
     if (dialogOpen) return
     const onKey = (e: KeyboardEvent) => {
+      // Already handled, e.g. by the grid, which may have just moved focus out of itself.
+      if (e.defaultPrevented) return
       const active = document.activeElement as HTMLElement | null
       const group = active?.dataset.nav
       if (active?.dataset.id) return // grid cells handle their own keys
@@ -110,6 +169,7 @@ export default function GuideScreen({
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         if (group === 'header' && !gridRef.current) navItems('state')[0]?.focus()
+        else if (group === 'header' && navItems('details').length) focusAction()
         else gridRef.current?.focus()
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
@@ -128,11 +188,17 @@ export default function GuideScreen({
     if (load.state === 'error') navItems('state')[0]?.focus()
   }, [load.state])
 
-  const shown = hovered ?? selected
+  // The preview card shows, in order: the hovered programme (only while the mouse is in
+  // use and the card's own button is not focused), the keyboard-focused programme while
+  // focus is in the grid, then the confirmed selection. Its button always acts on it.
+  const focused = focusedId ? programmeById.get(focusedId) : undefined
+  const selected = selectedId ? programmeById.get(selectedId) : undefined
+  const hover = input === 'pointer' && zone !== 'details' ? hovered : null
+  const shown = hover ?? (zone === 'grid' ? focused : undefined) ?? selected ?? focused ?? null
   const shownChannel = shown ? channelById.get(shown.channelId) : undefined
 
   return (
-    <div className="guide-screen">
+    <div className="guide-screen" data-input={input}>
       <AppHeader onGuide={() => gridRef.current?.focus()} />
 
       {guide && guide.channels.length > 0 ? (
@@ -152,11 +218,14 @@ export default function GuideScreen({
             ref={gridRef}
             guide={guide}
             now={now}
-            selectedId={selected?.id ?? initialFocusId}
+            focusedId={focusedId}
+            selectedId={selectedId}
+            onFocusProgramme={focusProgramme}
             onSelect={select}
             onHover={setHovered}
             onOpen={activateFromGrid}
-            onExitUp={() => navItems('header')[0]?.focus()}
+            onEnterSelected={focusAction}
+            onExitUp={focusAction}
           />
           <footer className="guide-footer">
             Schedules are demo data. Only {guide.channels[0].name} has a real stream.

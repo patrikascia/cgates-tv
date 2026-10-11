@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import ChannelLogo from '../../components/ChannelLogo'
 import Icon from '../../components/Icon'
 import type { Channel } from '../../data/channels'
@@ -45,6 +46,13 @@ export default function DetailsPanel({ programme: p, channel, now, hasReminder, 
   const videoRef = useRef<HTMLVideoElement>(null)
   const previewStatus = useMutedPreview(videoRef, previewUrl)
   const wantsPreview = avail === 'live'
+
+  // Green "pressed" fill while Enter / Space is held. :active covers the mouse; Enter
+  // never sets :active. Cleared on key up and blur, so it never sticks.
+  const [pressed, setPressed] = useState(false)
+  const onActionKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) setPressed(true)
+  }
 
   return (
     <section className="details" aria-live="polite" aria-label="Programme details">
@@ -102,7 +110,15 @@ export default function DetailsPanel({ programme: p, channel, now, hasReminder, 
         <p className="details-desc">{p.description}</p>
 
         <div className="details-actions">
-          <button type="button" data-nav="details" className="btn btn-primary" onClick={onActivate}>
+          <button
+            type="button"
+            data-nav="details"
+            className={`btn btn-primary action-btn${pressed ? ' is-pressed' : ''}`}
+            onClick={onActivate}
+            onKeyDown={onActionKeyDown}
+            onKeyUp={() => setPressed(false)}
+            onBlur={() => setPressed(false)}
+          >
             <Icon name={upcoming ? (hasReminder ? 'bellOff' : 'bell') : 'play'} />
             {upcoming ? (hasReminder ? 'Remove reminder' : 'Set reminder') : 'Watch now'}
           </button>

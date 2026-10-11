@@ -120,6 +120,7 @@ export default function ProgrammeDialog({
 
   const onKeyDown = (e: KeyboardEvent<HTMLDialogElement>) => {
     const target = e.target as HTMLElement
+    if (e.repeat && (e.key === 'Enter' || e.key === ' ')) return // see the guard in App
     if (e.key === 'Backspace' || e.key === 'BrowserBack') {
       e.preventDefault()
       close()
