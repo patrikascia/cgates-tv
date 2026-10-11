@@ -48,9 +48,9 @@ const focusAction = () => {
   const el = navItems('details')[0] ?? navItems('header')[0]
   el?.focus()
 }
-// The preview card's row: [thumbnail] … [primary action] [Recommendations]. The
-// thumbnail and Recommendations are reached only from the primary action (Left / Right).
-const actionRow = (nav: 'details' | 'details-recs' | 'details-thumb') =>
+// The preview card's row: [primary action] [Recommendations]. Recommendations is reached
+// only from the primary action (Right).
+const actionRow = (nav: 'details' | 'details-recs') =>
   document.querySelector<HTMLElement>(`[data-nav="${nav}"]`)
 
 // Entering the filter row lands on the active category.
@@ -229,15 +229,14 @@ export default function GuideScreen({
         return
       }
       // The preview card's controls: Up = active category, Down = the selected programme,
-      // Left/Right only within [thumbnail] [primary action] [Recommendations].
+      // Left/Right only within [primary action] [Recommendations].
       if (group.startsWith('details') && e.key.startsWith('Arrow')) {
         e.preventDefault()
         if (e.key === 'ArrowUp') focusFilters()
         else if (e.key === 'ArrowDown')
           gridRef.current?.focus(document.querySelector<HTMLElement>('.cell.is-selected')?.dataset.id)
-        else if (group === 'details') actionRow(e.key === 'ArrowRight' ? 'details-recs' : 'details-thumb')?.focus()
+        else if (group === 'details' && e.key === 'ArrowRight') actionRow('details-recs')?.focus()
         else if (group === 'details-recs' && e.key === 'ArrowLeft') actionRow('details')?.focus()
-        else if (group === 'details-thumb' && e.key === 'ArrowRight') actionRow('details')?.focus()
         return
       }
       const list = navItems(group)

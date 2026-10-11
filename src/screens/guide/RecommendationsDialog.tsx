@@ -81,7 +81,7 @@ export default function RecommendationsDialog({ picked, onPick, onClose }: Props
       <div className="state-card dialog-card rec-card-shell" tabIndex={-1}>
         <h2 className="state-title dialog-title" id="rec-title">
           <Icon name="sparkles" size="1.1em" />
-          Recommendations
+          Similar to this
         </h2>
         <p className="dialog-note" id="rec-note">
           <Icon name="info" size="1.1em" />

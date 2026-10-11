@@ -9,6 +9,7 @@ import type { Guide } from '../../data/epg'
 import { formatClock, formatDay, formatRange, formatTime, formatTimeSec, useNow } from '../../lib/time'
 import { usePlayer } from '../../player/usePlayer'
 import type { Source } from '../../player/usePlayer'
+import PlayerSettingsDialog from './PlayerSettingsDialog'
 import Scrubber from './Scrubber'
 import './player.css'
 
@@ -91,7 +92,6 @@ function TopBar({ selection, subtitle, children, onBack }: {
   children?: ReactNode
   onBack: () => void
 }) {
-  const now = useNow(5_000)
   return (
     <div className="player-top">
       <button type="button" className="btn btn-ghost" data-row="top" onClick={onBack}>
@@ -107,10 +107,7 @@ function TopBar({ selection, subtitle, children, onBack }: {
           <p className="player-subtitle">{subtitle}</p>
         </div>
       </div>
-      <div className="player-top-end">
-        {children}
-        <span className="clock-time">{formatTime(now)}</span>
-      </div>
+      <div className="player-top-end">{children}</div>
     </div>
   )
 }
@@ -227,11 +224,27 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
   const videoRef = useRef<HTMLVideoElement>(null)
   const playBtn = useRef<HTMLButtonElement>(null)
   const muteBtn = useRef<HTMLButtonElement>(null)
-  const { state, togglePlay, seekBy, seekTo, goToLiveEdge, setVolume, toggleMute, retry } = usePlayer(videoRef, source)
+  const settingsBtn = useRef<HTMLButtonElement>(null)
+  const {
+    state,
+    togglePlay,
+    seekBy,
+    seekTo,
+    goToLiveEdge,
+    setVolume,
+    toggleMute,
+    retry,
+    selectAudio,
+    setSubtitles,
+    selectSubtitle,
+  } = usePlayer(videoRef, source)
   const isLive = source.kind === 'live'
   const { status } = state
   const ready = state.rangeEnd > state.rangeStart && status !== 'loading' && status !== 'error'
-  const chrome = useAutoHide(status === 'playing')
+  // While the settings popup is open the controls stay visible and the player's own keys
+  // (Esc = back to guide, arrows) are off; the popup handles its keys itself.
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const chrome = useAutoHide(status === 'playing' && !settingsOpen)
   const now = useNow(5_000)
 
   const behind = Math.max(0, state.rangeEnd - state.currentTime)
@@ -263,6 +276,7 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
   // press only reveals them instead of also seeking or toggling something unseen.
   const { poke, hiddenRef } = chrome
   useEffect(() => {
+    if (settingsOpen) return
     const onKey = (e: KeyboardEvent) => {
       const wasHidden = hiddenRef.current
       poke()
@@ -274,9 +288,10 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [poke, hiddenRef])
+  }, [poke, hiddenRef, settingsOpen])
 
   useEffect(() => {
+    if (settingsOpen) return
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return // handled by a control (e.g. scrubber cancelling a scrub)
       const active = document.activeElement as HTMLElement | null
@@ -298,7 +313,7 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onBack, togglePlay, toggleMute])
+  }, [onBack, togglePlay, toggleMute, settingsOpen])
 
   const volume = state.muted ? 0 : state.volume
   const playing = status === 'playing' || status === 'buffering'
@@ -446,14 +461,7 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
               )}
               <span className="time-readout" aria-live="off">
                 {isLive ? (
-                  <>
-                    <strong>{playheadWall !== null ? formatTimeSec(playheadWall) : '--:--:--'}</strong>
-                    <span>
-                      {ready
-                        ? `Rewind window ${formatClock(state.rangeEnd - state.rangeStart)} · limited by this stream`
-                        : ''}
-                    </span>
-                  </>
+                  <strong>{playheadWall !== null ? formatTimeSec(playheadWall) : '--:--:--'}</strong>
                 ) : (
                   <>
                     <strong>{formatClock(state.currentTime - state.rangeStart)}</strong>
@@ -490,9 +498,35 @@ function Playback({ source, selection, guide, onBack, onWatchLive }: {
                 onChange={(e) => setVolume(Number(e.target.value))}
                 style={{ '--vol': volume } as CSSProperties}
               />
+              <button
+                ref={settingsBtn}
+                type="button"
+                className="ctl"
+                data-row="controls"
+                aria-label="Settings"
+                aria-haspopup="dialog"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Icon name="settings" />
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {settingsOpen && (
+        <PlayerSettingsDialog
+          audio={state.audio}
+          text={state.text}
+          textVisible={state.textVisible}
+          onSelectAudio={selectAudio}
+          onSubtitles={setSubtitles}
+          onSelectSubtitle={selectSubtitle}
+          onClose={() => {
+            setSettingsOpen(false)
+            settingsBtn.current?.focus()
+          }}
+        />
       )}
     </div>
   )

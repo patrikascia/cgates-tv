@@ -65,16 +65,7 @@ export default function DetailsPanel({ programme: p, channel, now, hasReminder, 
 
   return (
     <section className="details" aria-live="polite" aria-label="Programme details">
-      {/* The thumbnail runs the same action as the primary button. Reached with Left from
-          that button (not with Tab), or clicked. */}
-      <button
-        type="button"
-        data-nav="details-thumb"
-        tabIndex={-1}
-        className={`preview preview-${wantsPreview ? previewStatus : 'none'}`}
-        aria-label={`${actionLabel}: ${p.title}`}
-        onClick={onActivate}
-      >
+      <div className={`preview preview-${wantsPreview ? previewStatus : 'none'}`}>
         <video ref={videoRef} muted playsInline aria-hidden="true" />
         {wantsPreview && previewStatus === 'playing' && <span className="preview-badge">Live preview · muted</span>}
         {wantsPreview && previewStatus !== 'playing' && previewStatus !== 'error' && (
@@ -97,7 +88,7 @@ export default function DetailsPanel({ programme: p, channel, now, hasReminder, 
             </span>
           </span>
         )}
-      </button>
+      </div>
 
       <div className="details-body">
         <p className="details-channel">

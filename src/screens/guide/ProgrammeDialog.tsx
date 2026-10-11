@@ -11,7 +11,7 @@ import {
   saveReminder,
 } from '../../data/reminders'
 import type { ReminderMethods } from '../../data/reminders'
-import { formatDay, formatRange, formatTime } from '../../lib/time'
+import { formatDay, formatRange } from '../../lib/time'
 
 /**
  * `reminder`: set up (or change) a reminder for a programme that has not started.
@@ -36,12 +36,6 @@ interface Props {
 }
 
 type Stage = 'setup' | 'saving' | 'saved' | 'removing' | 'removed' | 'remove-failed' | 'info'
-
-// "today", "tomorrow", "on Sun 12 Oct"
-function dayPhrase(ms: number, now: number): string {
-  const day = formatDay(ms, now)
-  return day === 'Today' || day === 'Tomorrow' || day === 'Yesterday' ? day.toLowerCase() : `on ${day}`
-}
 
 const initialStage = (kind: DialogKind): Stage =>
   kind === 'reminder' ? 'setup' : kind === 'remove-reminder' ? 'removing' : 'info'
@@ -155,7 +149,6 @@ export default function ProgrammeDialog({
     if (e.target === e.currentTarget && e.detail === 1) close()
   }
 
-  const at = `${dayPhrase(p.start, now)} at ${formatTime(p.start)} on ${channel.name}`
   const liveLabel = channel.streamUrl ? 'Watch channel live' : `Watch ${REAL_CHANNEL.name} live`
   const reminderFlow = kind === 'reminder' || kind === 'remove-reminder'
 
@@ -180,26 +173,23 @@ export default function ProgrammeDialog({
     </label>
   )
 
+  // The eyebrow line above already names the programme, time and channel, so most states
+  // need only a title.
   let title: string
-  let text: string
+  let text = ''
   if (stage === 'saved') {
     title = `Reminder set · ${methodsLabel(methods)}`
-    text = `“${p.title}” starts ${at}.`
   } else if (stage === 'remove-failed') {
     title = 'The reminder could not be removed'
     text = 'Please try again.'
   } else if (stage === 'removed' || stage === 'removing') {
     title = stage === 'removed' ? 'Reminder removed.' : 'Removing reminder…'
-    text = `“${p.title}” starts ${at}.`
   } else if (kind === 'no-recording') {
     title = 'No recording available'
-    text = `“${p.title}” aired ${dayPhrase(p.start, now)}, ${formatRange(p.start, p.end)}. No recording exists for it, so it cannot be played. The live channel can only be rewound by about 3 minutes.`
   } else if (kind === 'no-stream') {
     title = `${channel.name} has no stream`
-    text = `This is a demo channel used to fill the guide. Only ${REAL_CHANNEL.name} has a real live stream.`
   } else {
     title = 'This programme has not started yet.'
-    text = `“${p.title}” starts ${at}.`
   }
 
   return (
@@ -207,7 +197,7 @@ export default function ProgrammeDialog({
       ref={ref}
       className="programme-dialog"
       aria-labelledby="programme-dialog-title"
-      aria-describedby="programme-dialog-text"
+      aria-describedby={text ? 'programme-dialog-text' : undefined}
       onClose={onClose}
       onKeyDown={onKeyDown}
       onClick={onClick}
@@ -223,9 +213,11 @@ export default function ProgrammeDialog({
             {stage === 'saved' && <Icon name="check" size="1.1em" />}
             {title}
           </h2>
-          <p className="state-text" id="programme-dialog-text">
-            {text}
-          </p>
+          {text && (
+            <p className="state-text" id="programme-dialog-text">
+              {text}
+            </p>
+          )}
         </div>
 
         {(stage === 'setup' || stage === 'saving') && (

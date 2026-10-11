@@ -17,6 +17,23 @@ export interface PlayerError {
   detail: string
 }
 
+/** An audio language the stream offers (one per language + role). */
+export interface AudioOption {
+  key: string
+  language: string
+  role: string
+  label: string | null
+  active: boolean
+}
+
+/** A subtitle / caption track the stream offers. */
+export interface TextOption {
+  id: number
+  language: string
+  label: string | null
+  active: boolean
+}
+
 export interface PlayerState {
   status: PlayerStatus
   error: PlayerError | null
@@ -27,6 +44,10 @@ export interface PlayerState {
   muted: boolean
   /** Wall-clock time (ms) of media time 0, when the stream exposes one (live DASH). */
   presentationStart: number | null
+  /** Tracks as reported by Shaka for the current stream (empty until it has loaded). */
+  audio: AudioOption[]
+  text: TextOption[]
+  textVisible: boolean
 }
 
 const INITIAL: PlayerState = {
@@ -38,6 +59,32 @@ const INITIAL: PlayerState = {
   volume: 1,
   muted: false,
   presentationStart: null,
+  audio: [],
+  text: [],
+  textVisible: false,
+}
+
+const audioKey = (t: shaka.extern.AudioTrack) => `${t.language}|${t.label ?? ''}`
+
+/**
+ * Audio and subtitle options exactly as the stream (Shaka) reports them right now. A
+ * language offered in several codecs or channel layouts is one option for the user.
+ */
+function readTracks(player: shaka.Player) {
+  const byKey = new Map<string, AudioOption>()
+  for (const t of player.getAudioTracks()) {
+    const key = audioKey(t)
+    const option = byKey.get(key) ?? { key, language: t.language, role: t.roles[0] ?? '', label: t.label, active: false }
+    option.active ||= t.active
+    byKey.set(key, option)
+  }
+  const text: TextOption[] = player.getTextTracks().map((t) => ({
+    id: t.id,
+    language: t.language,
+    label: t.label,
+    active: t.active,
+  }))
+  return { audio: [...byKey.values()], text, textVisible: text.some((t) => t.active) }
 }
 
 // Licence server for Widevine-protected streams (the recordings). None was provided for
@@ -139,6 +186,13 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
       if (!cancelled) setState((s) => ({ ...INITIAL, volume: s.volume, muted: s.muted }))
     })
 
+    // Track lists and the active selections, refreshed whenever Shaka reports a change.
+    const syncTracks = () => {
+      if (!cancelled) setState((s) => ({ ...s, ...readTracks(player) }))
+    }
+    const trackEvents = ['trackschanged', 'variantchanged', 'audiotrackschanged', 'audiotrackchanged', 'textchanged', 'adaptation']
+    for (const ev of trackEvents) player.addEventListener(ev, syncTracks)
+
     const sync = () => {
       if (cancelled) return
       const range = player.seekRange()
@@ -201,6 +255,7 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
       .then(() => {
         if (cancelled) return
         sync()
+        syncTracks()
         // Browsers may block autoplay with sound. If so we stay paused and say so.
         return video.play().catch(() => patch({ status: 'paused' }))
       })
@@ -222,6 +277,7 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
       video.removeEventListener('volumechange', sync)
       video.removeEventListener('seeked', onSeeked)
       player.removeEventListener('error', onShakaError)
+      for (const ev of trackEvents) player.removeEventListener(ev, syncTracks)
       playerRef.current = null
       teardownRef.current = player.destroy().catch(() => {})
     }
@@ -287,5 +343,55 @@ export function usePlayer(videoRef: RefObject<HTMLVideoElement | null>, source: 
     [videoRef],
   )
 
-  return { state, togglePlay, seekBy, seekTo, goToLiveEdge, changeVolume, setVolume, toggleMute, retry }
+  // Track selection. The UI reflects what Shaka reports afterwards (its track events), so a
+  // change the stream does not support is never shown as applied.
+  // Subtitle language chosen last, so switching subtitles back on restores it.
+  const lastTextId = useRef<number | null>(null)
+
+  const selectAudio = useCallback((option: AudioOption) => {
+    const p = playerRef.current
+    if (!p) return
+    const tracks = p.getAudioTracks()
+    const current = tracks.find((t) => t.active)
+    const candidates = tracks.filter((t) => audioKey(t) === option.key)
+    // Prefer the same codec as now, so only the language changes.
+    const track = candidates.find((t) => t.codecs === current?.codecs) ?? candidates[0]
+    if (track && !track.active) p.selectAudioTrack(track)
+  }, [])
+
+  // Shaka 5: a selected text track is shown; selecting none turns subtitles off.
+  const setSubtitles = useCallback((on: boolean) => {
+    const p = playerRef.current
+    if (!p) return
+    if (!on) {
+      p.selectTextTrack(null)
+      return
+    }
+    const tracks = p.getTextTracks()
+    const track = tracks.find((t) => t.id === lastTextId.current) ?? tracks[0]
+    if (track) p.selectTextTrack(track)
+  }, [])
+
+  const selectSubtitle = useCallback((option: TextOption) => {
+    const p = playerRef.current
+    const track = p?.getTextTracks().find((t) => t.id === option.id)
+    if (!p || !track) return
+    lastTextId.current = track.id
+    p.selectTextTrack(track)
+  }, [])
+
+  return {
+    state,
+    togglePlay,
+    seekBy,
+    seekTo,
+    goToLiveEdge,
+    changeVolume,
+    setVolume,
+    toggleMute,
+    retry,
+    selectAudio,
+    setSubtitles,
+    selectSubtitle,
+  }
 }

@@ -39,7 +39,7 @@ src/
 - Arrows: move keyboard focus through programmes; the preview card follows the focused programme. Up/Down keep the same point in time across channels.
 - Page Up / Page Down: jump 5 channels.
 - Enter (or Space) on a programme selects it (green block) and moves focus to the preview card's action button (**Watch now** on air, **Watch recording** once aired, **Set reminder** / **Remove reminder** before it starts). Enter or Space there runs it, once, even if the key is held. Up from the first channel or Shift+Tab also reach the button.
-- From the action button: Right = **Recommendations** (next to it), Left = the preview thumbnail (Enter on it runs the same action), Up = the active category, Down = the selected programme. Recommendations and the thumbnail are reached only this way (or with the mouse), not with Tab. From Recommendations: Left = action button; Enter/Space opens the popup. From the thumbnail: Right = action button.
+- From the action button: Right = **Recommendations** (next to it), Up = the active category, Down = the selected programme. Recommendations is reached only this way (or with the mouse), not with Tab. From Recommendations: Left = action button; Enter/Space opens the popup. The preview thumbnail is not interactive.
 - Recommendations popup: three mock picks (no personalisation service exists). Left/Right between cards, Enter/Space chooses one, Down = Close, Esc / Backspace closes and returns focus to Recommendations.
 - Anything that cannot play explains why in a dialog instead of opening the player. Removing a reminder is only possible from the action button.
 - In a dialog: focus starts on the main button; arrows or Tab / Shift+Tab move between the controls (Tab wraps around inside the dialog), Enter or Space toggles a checkbox, and Esc / Backspace closes it and returns focus to the button that opened it.
@@ -62,6 +62,7 @@ Drag a channel by its logo, name or grip (the dotted handle at the far left) to 
 **Player**
 
 - Focus starts on Play/Pause. Left/Right move through the enabled controls (rewind, forward, Go live, mute). Up goes to the Guide button at the top left; Down returns to Play/Pause.
+- **Settings** (gear, after Mute) opens audio language and subtitle options, read from the stream's actual tracks via Shaka. Inside: Up/Down between rows, Left/Right within a row, Enter/Space to choose, Esc / Backspace to close (focus returns to Settings). Choices are applied with Shaka and the popup shows what Shaka reports afterwards. The provided live stream has one audio track (labelled `eng` in its manifest) and no subtitles, so it shows that language and "No subtitles available for this channel"; switching was verified with Shaka's public multi-language demo stream.
 - The volume slider and the scrubber are mouse controls and are skipped by the arrow keys, so arrows never change the volume or seek by accident. After using either with the mouse, focus moves to Mute or Play/Pause.
 - The scrubber can still be reached with Tab: Left/Right then moves a preview marker by 10 s; it is applied after a short pause, or straight away with Enter. Esc cancels it.
 - Space or K: play/pause. M: mute.
