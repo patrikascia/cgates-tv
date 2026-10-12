@@ -13,6 +13,8 @@ export interface ChannelDrag {
 interface Session {
   id: string
   from: number
+  touch: boolean
+  startX: number
   startY: number
   startScroll: number
   lastY: number
@@ -20,17 +22,22 @@ interface Session {
   firstTop: number
   started: boolean
   raf: number
+  timer: number
 }
 
 const THRESHOLD = 4 // px of movement before a press becomes a drag
 const EDGE = 56 // px from the grid's top/bottom edge where auto-scroll starts
 const MAX_SPEED = 14 // auto-scroll px per frame
+// Touch: a finger must rest on a channel this long before it picks the row up; moving
+// sooner is a normal scroll of the guide.
+const LONG_PRESS = 400 // ms
+const TOUCH_SLOP = 8 // px a resting finger may wobble
 
 /**
  * Pointer-based drag and drop for channel rows. Pointer events (rather than the HTML5
  * drag API) give a smooth custom preview, work with touch and pens, and let the grid
  * auto-scroll. Rows all have the same height, so the drop index follows from the
- * dragged row's centre.
+ * dragged row's centre. With touch, a long press starts the drag so swipes still scroll.
  */
 export function useChannelDrag(
   scrollRef: RefObject<HTMLDivElement | null>,
@@ -85,6 +92,7 @@ export function useChannelDrag(
       session.current = null
       if (!s) return
       cancelAnimationFrame(s.raf)
+      window.clearTimeout(s.timer)
       if (commit && s.started) {
         const { to } = measure(s)
         if (to !== s.from) onDrop(s.id, to)
@@ -99,11 +107,16 @@ export function useChannelDrag(
       const sc = scrollRef.current
       const rowEl = e.currentTarget.closest<HTMLElement>('.epg-row')
       if (e.button !== 0 || !e.isPrimary || count < 2 || !sc || !rowEl) return
-      e.preventDefault() // no text selection, and keyboard focus stays where it is
-      e.currentTarget.setPointerCapture(e.pointerId)
-      session.current = {
+      const touch = e.pointerType === 'touch'
+      if (!touch) {
+        e.preventDefault() // no text selection, and keyboard focus stays where it is
+        e.currentTarget.setPointerCapture(e.pointerId)
+      }
+      const s: Session = {
         id: channelIds[row],
         from: row,
+        touch,
+        startX: e.clientX,
         startY: e.clientY,
         startScroll: sc.scrollTop,
         lastY: e.clientY,
@@ -111,12 +124,28 @@ export function useChannelDrag(
         firstTop: rowEl.offsetTop - row * rowEl.offsetHeight,
         started: false,
         raf: 0,
+        timer: 0,
+      }
+      session.current = s
+      if (touch) {
+        s.timer = window.setTimeout(() => {
+          if (session.current !== s) return
+          s.started = true
+          navigator.vibrate?.(10)
+          update()
+          startAutoScroll()
+        }, LONG_PRESS)
       }
     },
     onPointerMove: (e: PointerEvent<HTMLElement>) => {
       const s = session.current
       if (!s) return
       s.lastY = e.clientY
+      if (s.touch && !s.started) {
+        // Moved before the long press: a scroll, not a drag.
+        if (Math.hypot(e.clientX - s.startX, e.clientY - s.startY) > TOUCH_SLOP) finish(false)
+        return
+      }
       if (!s.started) {
         if (Math.abs(e.clientY - s.startY) < THRESHOLD) return
         s.started = true
@@ -137,6 +166,17 @@ export function useChannelDrag(
     lastRowsKey.current = rowsKey
     if (session.current) finish(false)
   }, [rowsKey, finish])
+
+  // Once a touch drag has started, the finger moves the row instead of scrolling the guide.
+  useEffect(() => {
+    const sc = scrollRef.current
+    if (!sc) return
+    const onTouchMove = (e: TouchEvent) => {
+      if (session.current?.touch && session.current.started) e.preventDefault()
+    }
+    sc.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => sc.removeEventListener('touchmove', onTouchMove)
+  }, [scrollRef])
 
   // Esc cancels a drag. Capture phase, so the grid's own Esc ("back to now") does not run.
   const dragging = drag !== null

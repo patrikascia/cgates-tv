@@ -255,7 +255,10 @@ export default function EpgGrid({
                       tabIndex={-1}
                       aria-label={`${p.title}, ${formatRange(p.start, p.end)}, ${status}`}
                       aria-pressed={p.id === selectedId}
-                      onPointerEnter={() => onHover(p)}
+                      // Hover previews are for mice: a finger swiping the grid leaves the details alone.
+                      onPointerEnter={(e) => {
+                        if (e.pointerType !== 'touch') onHover(p)
+                      }}
                       onClick={(e) => onCellClick(e, p)}
                     >
                       <span className="cell-inner">
