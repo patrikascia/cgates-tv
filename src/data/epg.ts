@@ -2,6 +2,7 @@
 // Titles, times and descriptions are invented — including for the one real channel,
 // whose actual programming is unknown.
 
+import { startOfDay } from '../lib/time'
 import { CHANNELS, REAL_CHANNEL } from './channels'
 import type { Channel, Genre } from './channels'
 
@@ -31,7 +32,6 @@ export interface Guide {
 }
 
 export const MIN = 60_000
-const HOUR = 60 * MIN
 
 interface Template {
   title: string
@@ -106,7 +106,6 @@ function seeded(seed: string) {
   }
 }
 
-const floorTo = (t: number, step: number) => Math.floor(t / step) * step
 
 function scheduleFor(channel: Channel, from: number, to: number, sampleMoment: number): Programme[] {
   const pool = POOLS[channel.genre]
@@ -138,9 +137,14 @@ function scheduleFor(channel: Channel, from: number, to: number, sampleMoment: n
   return out
 }
 
+/**
+ * Yesterday, today and tomorrow (local days) as ONE continuous schedule, so a programme
+ * running over midnight is the same programme on both days. The guide shows one day at a
+ * time through dayView().
+ */
 export function buildGuide(now: number): Guide {
-  const windowStart = floorTo(now, 30 * MIN) - 4 * HOUR
-  const windowEnd = windowStart + 24 * HOUR
+  const windowStart = startOfDay(now, -1)
+  const windowEnd = startOfDay(now, 2)
   const sampleMoment = now - SAMPLE_RECORDING_OFFSET_SEC * 1000
   const programmes: Record<string, Programme[]> = {}
   for (const c of CHANNELS) programmes[c.id] = scheduleFor(c, windowStart, windowEnd, sampleMoment)
@@ -158,6 +162,15 @@ export function fetchGuide(): Promise<Guide> {
       else resolve(buildGuide(Date.now()))
     }, 500)
   })
+}
+
+/** The guide restricted to one local day (00:00 to 24:00): programmes overlapping it. */
+export function dayView(guide: Guide, dayStart: number, dayEnd: number): Guide {
+  const programmes: Record<string, Programme[]> = {}
+  for (const [id, list] of Object.entries(guide.programmes)) {
+    programmes[id] = list.filter((p) => p.end > dayStart && p.start < dayEnd)
+  }
+  return { ...guide, programmes, windowStart: dayStart, windowEnd: dayEnd }
 }
 
 export function programmeAt(list: Programme[] | undefined, t: number): Programme | undefined {

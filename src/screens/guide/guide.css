@@ -157,6 +157,59 @@
   border-right: 1px solid var(--line);
 }
 .epg-day { font-size: 0.875rem; font-weight: 650; }
+
+/* ---- Day selector (Yesterday / Today / Tomorrow) ----------------------------------
+   The corner label is a button; its menu sits next to the scroller (inside .epg) so
+   the scroller does not clip it. Mouse-only, like the rest of the guide. */
+.day-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2rem;
+  margin-left: -0.75rem;
+  padding: 0 0.625rem 0 0.75rem;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.day-button:hover { border-color: var(--brand); }
+.day-button.is-open { border-color: var(--brand); background: var(--surface-2); }
+.day-button .icon { color: var(--text-2); transition: transform 0.15s var(--ease); }
+.day-button.is-open .icon { transform: rotate(180deg); }
+.day-date { color: var(--text-3); font-size: 0.8125rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.day-menu {
+  position: absolute;
+  top: calc(var(--axis-h) - 0.125rem);
+  left: calc(var(--pad-x) - 1rem);
+  z-index: 20;
+  display: grid;
+  gap: 0.25rem;
+  min-width: 15rem;
+  padding: 0.375rem;
+  border: 1px solid var(--line-2);
+  border-radius: 0.75rem;
+  background: var(--surface-1);
+  box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 0.55);
+}
+.day-option {
+  display: grid;
+  grid-template-columns: 1fr auto 1.1em;
+  align-items: center;
+  gap: 0.75rem;
+  height: 2.75rem;
+  padding: 0 0.75rem;
+  border: 2px solid transparent;
+  border-radius: 0.5rem;
+  color: var(--text);
+  text-align: left;
+}
+.day-option-label { font-size: 0.9375rem; font-weight: 600; }
+.day-option:hover { border-color: var(--brand); }
+.day-option[aria-checked='true'] { background: rgb(33 177 75 / 0.14); }
+.day-option[aria-checked='true'] .day-option-label { font-weight: 750; }
+.day-option[aria-checked='true'] .icon { color: var(--brand); }
+@media (prefers-reduced-motion: reduce) { .day-button .icon { transition: none; } }
 .epg-ticks { position: relative; flex: 1; }
 .epg-tick {
   position: absolute;
@@ -476,7 +529,7 @@
 @media (max-width: 900px) {
   :root { --pad-x: 1.25rem; }
   .guide-screen { --col: 11rem; }
-  .preview, .epg-channel .channel-logo { display: none; }
+  .preview, .epg-channel .channel-logo, .day-button .day-date { display: none; }
   .details { grid-template-columns: minmax(0, 1fr); }
   .app-header { gap: 1.25rem; }
 }

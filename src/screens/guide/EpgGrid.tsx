@@ -1,9 +1,12 @@
-import { useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent } from 'react'
 import ChannelLogo from '../../components/ChannelLogo'
+import Icon from '../../components/Icon'
 import { MIN, availabilityOf, phaseOf } from '../../data/epg'
 import type { Guide, Programme } from '../../data/epg'
-import { formatDay, formatRange, formatTime } from '../../lib/time'
+import { mouseOnly } from '../../lib/mouseOnly'
+import { formatDate, formatDay, formatRange, formatTime, startOfDay } from '../../lib/time'
+import type { DayOffset } from '../../lib/time'
 import { rowShift, useChannelDrag } from './useChannelDrag'
 
 interface Props {
@@ -17,15 +20,37 @@ interface Props {
   onOpen: (p: Programme) => void
   /** Move a channel row to a new index (drag and drop). */
   onReorder: (channelId: string, to: number) => void
+  /** Day shown (the guide passed in is already that day, 00:00 to 24:00). */
+  day: DayOffset
+  onDayChange: (day: DayOffset) => void
+  /** Changes when the user picks Today: scroll back to the current time. */
+  nowRequest: number
 }
 
 const SLOT = 30 * MIN
+const DAYS: { day: DayOffset; label: string }[] = [
+  { day: -1, label: 'Yesterday' },
+  { day: 0, label: 'Today' },
+  { day: 1, label: 'Tomorrow' },
+]
 
-export default function EpgGrid({ guide, now, selectedId, onSelect, onHover, onOpen, onReorder }: Props) {
+export default function EpgGrid({
+  guide,
+  now,
+  selectedId,
+  onSelect,
+  onHover,
+  onOpen,
+  onReorder,
+  day,
+  onDayChange,
+  nowRequest,
+}: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const cornerRef = useRef<HTMLDivElement>(null)
   const nowLineRef = useRef<HTMLDivElement>(null)
-  const [viewDayTime, setViewDayTime] = useState(now)
+  const dayMenuRef = useRef<HTMLDivElement>(null)
+  const [dayMenuOpen, setDayMenuOpen] = useState(false)
 
   const { channels, programmes, windowStart, windowEnd } = guide
   const totalMin = (windowEnd - windowStart) / MIN
@@ -47,11 +72,6 @@ export default function EpgGrid({ guide, now, selectedId, onSelect, onHover, onO
     return { sc, col, pxPerMin }
   }, [totalMin])
 
-  const timeAtViewLeft = useCallback(() => {
-    const { sc, pxPerMin } = geometry()
-    return windowStart + (sc.scrollLeft / pxPerMin) * MIN
-  }, [geometry, windowStart])
-
   const reveal = useCallback(
     (el: HTMLElement) => {
       const { sc, col } = geometry()
@@ -71,19 +91,43 @@ export default function EpgGrid({ guide, now, selectedId, onSelect, onHover, onO
   const channelIds = useMemo(() => channels.map((c) => c.id), [channels])
   const { drag, bind: dragHandle, onScroll: onDragScroll } = useChannelDrag(scrollRef, channelIds, onReorder)
 
-  // Initial position: "now" a little in from the left edge, then the selected programme
-  // (e.g. the one just watched) scrolled into view. Runs once.
+  // Every day is laid out 00:00 to 24:00 at the same scale, so a scroll position is a time
+  // of day: switching days keeps the window. This puts the current time of day a little
+  // in from the left edge (on Today, that is "now").
+  const scrollToNow = useCallback(() => {
+    const sc = scrollRef.current
+    if (!sc) return
+    const { pxPerMin } = geometry()
+    const t = Date.now()
+    sc.scrollLeft = ((t - startOfDay(t)) / MIN - 40) * pxPerMin
+  }, [geometry])
+
+  // Initial position: the current time, then the selected programme (e.g. the one just
+  // watched) scrolled into view. Runs once.
   const initialised = useRef(false)
   useLayoutEffect(() => {
-    const sc = scrollRef.current
-    const line = nowLineRef.current
-    if (initialised.current || !sc || !line) return
+    if (initialised.current || !scrollRef.current) return
     initialised.current = true
-    const { col, pxPerMin } = geometry()
-    sc.scrollLeft = line.offsetLeft - col - 40 * pxPerMin
+    scrollToNow()
     const el = selectedId ? cellEl(selectedId) : null
     if (el) reveal(el)
-  }, [geometry, selectedId, reveal])
+  }, [scrollToNow, selectedId, reveal])
+
+  // Picking Today returns to the current time (after the day's rows have rendered).
+  useLayoutEffect(() => {
+    if (nowRequest) scrollToNow()
+  }, [nowRequest, scrollToNow])
+
+  // The day menu closes on a choice or on any click outside it.
+  useEffect(() => {
+    if (!dayMenuOpen) return
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node
+      if (!dayMenuRef.current?.contains(t) && !cornerRef.current?.contains(t)) setDayMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [dayMenuOpen])
 
   // The first click selects a programme (the preview card follows it); a click on the
   // programme that is already selected runs its action. A double-click therefore selects
@@ -95,11 +139,7 @@ export default function EpgGrid({ guide, now, selectedId, onSelect, onHover, onO
     else onSelect(p)
   }
 
-  const onScroll = () => {
-    onDragScroll()
-    const t = timeAtViewLeft()
-    if (formatDay(t, now) !== formatDay(viewDayTime, now)) setViewDayTime(t)
-  }
+  const onScroll = () => onDragScroll()
 
   const minutesFrom = (t: number) => (Math.min(Math.max(t, windowStart), windowEnd) - windowStart) / MIN
   const nowMin = minutesFrom(now)
@@ -107,6 +147,28 @@ export default function EpgGrid({ guide, now, selectedId, onSelect, onHover, onO
 
   return (
     <div className="epg" data-dragging={drag ? '' : undefined} onPointerLeave={() => onHover(null)}>
+      {dayMenuOpen && (
+        <div className="day-menu" role="menu" aria-label="Day" ref={dayMenuRef}>
+          {DAYS.map((d) => (
+            <button
+              key={d.day}
+              type="button"
+              tabIndex={-1}
+              role="menuitemradio"
+              aria-checked={d.day === day}
+              className="day-option"
+              onClick={mouseOnly(() => {
+                setDayMenuOpen(false)
+                onDayChange(d.day)
+              })}
+            >
+              <span className="day-option-label">{d.label}</span>
+              <span className="day-date">{formatDate(startOfDay(now, d.day))}</span>
+              {d.day === day ? <Icon name="check" size="1.1em" /> : <span className="icon-space" aria-hidden="true" />}
+            </button>
+          ))}
+        </div>
+      )}
       <div
         className="epg-scroll"
         ref={scrollRef}
@@ -116,7 +178,18 @@ export default function EpgGrid({ guide, now, selectedId, onSelect, onHover, onO
         <div className="epg-canvas">
           <div className="epg-axis">
             <div className="epg-corner" ref={cornerRef}>
-              <span className="epg-day">{formatDay(viewDayTime, now)}</span>
+              <button
+                type="button"
+                tabIndex={-1}
+                className={`day-button${dayMenuOpen ? ' is-open' : ''}`}
+                aria-haspopup="menu"
+                aria-expanded={dayMenuOpen}
+                onClick={mouseOnly(() => setDayMenuOpen((o) => !o))}
+              >
+                <span className="epg-day">{DAYS.find((d) => d.day === day)?.label}</span>
+                <span className="day-date">{formatDate(windowStart)}</span>
+                <Icon name="chevronDown" size="1em" />
+              </button>
             </div>
             <div className="epg-ticks" aria-hidden="true">
               {ticks.map((t) => (

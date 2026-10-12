@@ -17,6 +17,7 @@ const PATHS = {
   settings: 'M10.53 5.87L10.83 3.68A8.4 8.4 0 0 1 13.17 3.68L13.47 5.87A6.3 6.3 0 0 1 15.29 6.63L17.06 5.29A8.4 8.4 0 0 1 18.71 6.94L17.37 8.71A6.3 6.3 0 0 1 18.13 10.53L20.32 10.83A8.4 8.4 0 0 1 20.32 13.17L18.13 13.47A6.3 6.3 0 0 1 17.37 15.29L18.71 17.06A8.4 8.4 0 0 1 17.06 18.71L15.29 17.37A6.3 6.3 0 0 1 13.47 18.13L13.17 20.32A8.4 8.4 0 0 1 10.83 20.32L10.53 18.13A6.3 6.3 0 0 1 8.71 17.37L6.94 18.71A8.4 8.4 0 0 1 5.29 17.06L6.63 15.29A6.3 6.3 0 0 1 5.87 13.47L3.68 13.17A8.4 8.4 0 0 1 3.68 10.83L5.87 10.53A6.3 6.3 0 0 1 6.63 8.71L5.29 6.94A8.4 8.4 0 0 1 6.94 5.29L8.71 6.63A6.3 6.3 0 0 1 10.53 5.87ZM14.7 12a2.7 2.7 0 1 0 -5.4 0 2.7 2.7 0 1 0 5.4 0z',
   star: 'M12 3.6l2.55 5.2 5.75.85-4.15 4.05.98 5.7L12 16.7l-5.13 2.7.98-5.7L3.7 9.65l5.75-.85z',
   trending: 'M3.5 16.5 9 11l4 4 7.5-7.5M15 7.5h5.5V13',
+  chevronDown: 'M7 10l5 5 5-5',
   // Guide category filters
   all: 'M4.5 4.5h6v6h-6zM13.5 4.5h6v6h-6zM4.5 13.5h6v6h-6zM13.5 13.5h6v6h-6z',
   music: 'M9 17.5V6l10-2v11.5M9 17.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM19 15.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z',
@@ -27,7 +28,7 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS
 
-const STROKED: ReadonlySet<IconName> = new Set(['back', 'volume', 'mute', 'retry', 'info', 'bell', 'check', 'bellOff', 'all', 'music', 'history', 'sport', 'movies', 'sparkles', 'settings', 'star', 'trending'])
+const STROKED: ReadonlySet<IconName> = new Set(['back', 'volume', 'mute', 'retry', 'info', 'bell', 'check', 'bellOff', 'all', 'music', 'history', 'sport', 'movies', 'sparkles', 'settings', 'star', 'trending', 'chevronDown'])
 
 export default function Icon({ name, size = '1.25em' }: { name: IconName; size?: string }) {
   const stroked = STROKED.has(name)

@@ -26,6 +26,17 @@ export function formatDay(ms: number, now: number): string {
 
 export const formatDate = (ms: number) => dayFmt.format(ms)
 
+/** The guide's selectable days, relative to today. */
+export type DayOffset = -1 | 0 | 1
+
+/** Local midnight of the day `offset` days from `ms` (DST-safe). */
+export function startOfDay(ms: number, offset = 0): number {
+  const d = new Date(ms)
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + offset)
+  return d.getTime()
+}
+
 /** "1 h 25 min", "40 min", "under 1 min" */
 export function formatDuration(ms: number): string {
   const total = Math.round(ms / 60_000)

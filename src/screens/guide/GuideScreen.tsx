@@ -3,11 +3,12 @@ import type { GuideLoad, Selection } from '../../App'
 import AppHeader from '../../components/AppHeader'
 import Icon from '../../components/Icon'
 import type { Channel } from '../../data/channels'
-import { availabilityOf, phaseOf, programmeAt } from '../../data/epg'
+import { availabilityOf, dayView, phaseOf, programmeAt } from '../../data/epg'
 import type { Programme } from '../../data/epg'
 import type { ReminderMethods } from '../../data/reminders'
 import { mouseOnly } from '../../lib/mouseOnly'
-import { useNow } from '../../lib/time'
+import { startOfDay, useNow } from '../../lib/time'
+import type { DayOffset } from '../../lib/time'
 import CategoryFilters from './CategoryFilters'
 import type { CategoryFilter } from './CategoryFilters'
 import { useChannelOrders } from './channelOrder'
@@ -25,9 +26,12 @@ interface Props {
   load: GuideLoad
   /** Programme to select on arrival, e.g. the one just watched. */
   initialSelectedId: string | null
-  onSelectionChange: (id: string) => void
+  onSelectionChange: (id: string | null) => void
   category: CategoryFilter
   onCategoryChange: (category: CategoryFilter) => void
+  /** Day shown: yesterday (-1), today (0) or tomorrow (1). */
+  day: DayOffset
+  onDayChange: (day: DayOffset) => void
   /** Reminder delivery methods by programme id. */
   reminders: ReadonlyMap<string, ReminderMethods>
   /** Delivery methods pre-selected for a new reminder: the last ones saved, else Email. */
@@ -49,6 +53,8 @@ export default function GuideScreen({
   onSelectionChange,
   category,
   onCategoryChange,
+  day,
+  onDayChange,
   reminders,
   preferredMethods,
   onReminderSaved,
@@ -73,7 +79,15 @@ export default function GuideScreen({
   // All and each category have their own saved channel order (drag and drop).
   const { channelsFor, moveChannel } = useChannelOrders(guide?.channels ?? NO_CHANNELS)
   const visibleChannels = useMemo(() => channelsFor(category), [channelsFor, category])
-  const orderedGuide = useMemo(() => guide && { ...guide, channels: visibleChannels }, [guide, visibleChannels])
+  // The chosen day, 00:00 to 24:00 local time. The grid shows only that day.
+  const dayStart = startOfDay(now, day)
+  const dayEnd = startOfDay(now, day + 1)
+  const orderedGuide = useMemo(
+    () => guide && dayView({ ...guide, channels: visibleChannels }, dayStart, dayEnd),
+    [guide, visibleChannels, dayStart, dayEnd],
+  )
+  // Bumped when the user picks Today: the grid scrolls back to the current time.
+  const [nowRequest, setNowRequest] = useState(0)
   const reorderVisible = useCallback((id: string, to: number) => moveChannel(category, id, to), [moveChannel, category])
   const channelById = useMemo(() => new Map(guide?.channels.map((c) => [c.id, c])), [guide])
   const programmeById = useMemo(
@@ -89,11 +103,12 @@ export default function GuideScreen({
     [onSelectionChange],
   )
 
-  // What is on now on the first visible channel (or its first programme).
+  // What is on on the first visible channel at the current time of day, on the given day.
   const firstVisible = useCallback(
-    (channels: Channel[]) => {
+    (channels: Channel[], onDay: DayOffset) => {
       const list = guide && channels[0] ? guide.programmes[channels[0].id] : undefined
-      return programmeAt(list, Date.now()) ?? list?.[0]
+      const t = Date.now()
+      return programmeAt(list, startOfDay(t, onDay) + (t - startOfDay(t)))
     },
     [guide],
   )
@@ -107,10 +122,26 @@ export default function GuideScreen({
       const visible = channelsFor(next)
       const channelId = programmeById.get(selectedId)?.channelId
       if (visible.some((c) => c.id === channelId)) return
-      const first = firstVisible(visible)
+      const first = firstVisible(visible, day)
       if (first) select(first)
     },
-    [onCategoryChange, selectedId, channelsFor, programmeById, firstVisible, select],
+    [onCategoryChange, selectedId, channelsFor, programmeById, firstVisible, select, day],
+  )
+
+  // Switching days keeps the time window (the grid keeps its scroll position); picking
+  // Today returns to the current time. A selection that is not on the new day is cleared.
+  const changeDay = useCallback(
+    (next: DayOffset) => {
+      onDayChange(next)
+      if (next === 0) setNowRequest((n) => n + 1)
+      const p = selectedId ? programmeById.get(selectedId) : undefined
+      const t = Date.now()
+      if (selectedId && !(p && p.end > startOfDay(t, next) && p.start < startOfDay(t, next + 1))) {
+        setSelectedId(null)
+        onSelectionChange(null)
+      }
+    },
+    [onDayChange, selectedId, programmeById, onSelectionChange],
   )
 
   // A programme's primary action, from the preview card's button, a click on the selected
@@ -144,9 +175,10 @@ export default function GuideScreen({
   // on the first visible channel. Its button always acts on the programme it shows. A
   // selection or hover on a channel that is not shown counts as absent.
   const visibleIds = new Set(visibleChannels.map((c) => c.id))
-  const onScreen = (p: Programme | undefined | null) => (p && visibleIds.has(p.channelId) ? p : null)
+  const onScreen = (p: Programme | undefined | null) =>
+    p && visibleIds.has(p.channelId) && p.end > dayStart && p.start < dayEnd ? p : null
   const selected = onScreen(selectedId ? programmeById.get(selectedId) : undefined)
-  const shown = onScreen(hovered) ?? selected ?? firstVisible(visibleChannels) ?? null
+  const shown = onScreen(hovered) ?? selected ?? firstVisible(visibleChannels, day) ?? null
   const shownChannel = shown ? channelById.get(shown.channelId) : undefined
 
   return (
@@ -203,6 +235,9 @@ export default function GuideScreen({
             onHover={setHovered}
             onOpen={activateFromGrid}
             onReorder={reorderVisible}
+            day={day}
+            onDayChange={changeDay}
+            nowRequest={nowRequest}
           />
           {panel === 'recommended' && (
             <ProgrammePanel
