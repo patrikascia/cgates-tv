@@ -4,10 +4,10 @@ import type { Selection } from '../../App'
 import ChannelLogo from '../../components/ChannelLogo'
 import Icon from '../../components/Icon'
 import { REAL_CHANNEL } from '../../data/channels'
-import { availabilityOf, programmeAt } from '../../data/epg'
-import type { Guide } from '../../data/epg'
+import { programmeAt } from '../../data/epg'
+import type { Availability, Guide } from '../../data/epg'
 import { formatClock, formatDay, formatRange, formatTime, formatTimeSec, useNow } from '../../lib/time'
-import { usePlayer } from '../../player/usePlayer'
+import { playbackFor, usePlayer } from '../../player/usePlayer'
 import type { Source } from '../../player/usePlayer'
 import PlayerSettingsDialog from './PlayerSettingsDialog'
 import Scrubber from './Scrubber'
@@ -59,12 +59,12 @@ export default function PlayerScreen({ selection, guide, onBack, onWatchLive }: 
   const { channel, programme } = selection
   // Decided once when the screen opens; a new selection remounts this screen.
   const [openedAt] = useState(() => Date.now())
-  const mode = programme ? availabilityOf(programme, channel, openedAt) : channel.streamUrl ? 'live' : 'demo'
+  const plan = playbackFor(channel, programme, openedAt)
 
-  if (mode === 'live' && channel.streamUrl) {
+  if ('source' in plan) {
     return (
       <Playback
-        source={{ kind: 'live', url: channel.streamUrl, title: channel.name }}
+        source={plan.source}
         selection={selection}
         guide={guide}
         onBack={onBack}
@@ -72,18 +72,7 @@ export default function PlayerScreen({ selection, guide, onBack, onWatchLive }: 
       />
     )
   }
-  if (mode === 'recording' && programme?.recordingUrl) {
-    return (
-      <Playback
-        source={{ kind: 'recording', url: programme.recordingUrl, title: programme.title }}
-        selection={selection}
-        guide={guide}
-        onBack={onBack}
-        onWatchLive={onWatchLive}
-      />
-    )
-  }
-  return <Unavailable selection={selection} reason={mode} onBack={onBack} onWatchLive={onWatchLive} />
+  return <Unavailable selection={selection} reason={plan.unavailable} onBack={onBack} onWatchLive={onWatchLive} />
 }
 
 function TopBar({ selection, subtitle, children, onBack }: {
@@ -116,7 +105,7 @@ function TopBar({ selection, subtitle, children, onBack }: {
 
 function Unavailable({ selection, reason, onBack, onWatchLive }: {
   selection: Selection
-  reason: 'demo' | 'upcoming' | 'no-recording' | 'live' | 'recording'
+  reason: Availability
   onBack: () => void
   onWatchLive: () => void
 }) {

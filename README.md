@@ -17,6 +17,7 @@ To check the project:
 
 ```bash
 npm run lint
+npm test
 npm run build
 ```
 

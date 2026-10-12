@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import shaka from 'shaka-player'
+import type { Channel } from '../data/channels'
+import { availabilityOf } from '../data/epg'
+import type { Availability, Programme } from '../data/epg'
 
 export type SourceKind = 'live' | 'recording'
 
@@ -8,6 +11,21 @@ export interface Source {
   kind: SourceKind
   url: string
   title: string
+}
+
+/** What the player can do for a channel or programme: play a source, or say why it can't. */
+export type PlaybackPlan = { source: Source } | { unavailable: Availability }
+
+/** Decides playback for a selection (`programme` null = the channel's live feed). */
+export function playbackFor(channel: Channel, programme: Programme | null, now: number): PlaybackPlan {
+  const mode = programme ? availabilityOf(programme, channel, now) : channel.streamUrl ? 'live' : 'demo'
+  if (mode === 'live' && channel.streamUrl) {
+    return { source: { kind: 'live', url: channel.streamUrl, title: channel.name } }
+  }
+  if (mode === 'recording' && programme?.recordingUrl) {
+    return { source: { kind: 'recording', url: programme.recordingUrl, title: programme.title } }
+  }
+  return { unavailable: mode }
 }
 
 export type PlayerStatus = 'loading' | 'buffering' | 'playing' | 'paused' | 'ended' | 'error'
@@ -108,7 +126,7 @@ function httpStatus(e: shaka.util.Error | undefined): number | null {
 }
 
 /** Turns a Shaka error into a message that names the actual cause. */
-function describeError(err: unknown, kind: SourceKind): PlayerError {
+export function describeError(err: unknown, kind: SourceKind): PlayerError {
   const e = err as shaka.util.Error
   const label = kind === 'live' ? 'live stream' : 'recording'
   if (!(e instanceof shaka.util.Error)) {

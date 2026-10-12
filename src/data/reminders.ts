@@ -4,6 +4,7 @@
 // saveReminder() / removeReminder() as API calls: the reminder dialog already handles
 // the pending, success and failure states.
 
+import { useCallback, useState } from 'react'
 import type { Programme } from './epg'
 
 /** How the user wants to be reminded. At least one must be true. */
@@ -26,4 +27,25 @@ export function saveReminder(_programme: Programme, _methods: ReminderMethods): 
 
 export function removeReminder(_programme: Programme): Promise<void> {
   return Promise.resolve()
+}
+
+/** The app's reminders: delivery methods by programme id, in memory only (see above). */
+export function useReminders() {
+  const [reminders, setReminders] = useState<ReadonlyMap<string, ReminderMethods>>(() => new Map())
+  // The last saved delivery methods become the default for the next new reminder.
+  const [preferredMethods, setPreferredMethods] = useState<ReminderMethods>(DEFAULT_METHODS)
+  const reminderSaved = useCallback((id: string, methods: ReminderMethods) => {
+    setReminders((prev) => new Map(prev).set(id, methods))
+    setPreferredMethods(methods)
+  }, [])
+  const reminderRemoved = useCallback(
+    (id: string) =>
+      setReminders((prev) => {
+        const next = new Map(prev)
+        next.delete(id)
+        return next
+      }),
+    [],
+  )
+  return { reminders, preferredMethods, reminderSaved, reminderRemoved }
 }

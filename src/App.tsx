@@ -3,8 +3,7 @@ import { REAL_CHANNEL } from './data/channels'
 import type { Channel } from './data/channels'
 import { fetchGuide } from './data/epg'
 import type { Guide, Programme } from './data/epg'
-import { DEFAULT_METHODS } from './data/reminders'
-import type { ReminderMethods } from './data/reminders'
+import { useReminders } from './data/reminders'
 import type { DayOffset } from './lib/time'
 import type { CategoryFilter } from './screens/guide/CategoryFilters'
 import GuideScreen from './screens/guide/GuideScreen'
@@ -29,23 +28,8 @@ export default function App() {
   const [category, setCategory] = useState<CategoryFilter>('all')
   // Day shown in the guide (yesterday / today / tomorrow), kept like the category.
   const [day, setDay] = useState<DayOffset>(0)
-  // Reminder delivery methods by programme id. Prototype: kept in memory only, see data/reminders.ts.
-  const [reminders, setReminders] = useState<ReadonlyMap<string, ReminderMethods>>(() => new Map())
-  // The last saved delivery methods become the default for the next new reminder.
-  const [preferredMethods, setPreferredMethods] = useState<ReminderMethods>(DEFAULT_METHODS)
-  const saveReminder = useCallback((id: string, methods: ReminderMethods) => {
-    setReminders((prev) => new Map(prev).set(id, methods))
-    setPreferredMethods(methods)
-  }, [])
-  const removeReminder = useCallback(
-    (id: string) =>
-      setReminders((prev) => {
-        const next = new Map(prev)
-        next.delete(id)
-        return next
-      }),
-    [],
-  )
+  // Prototype: kept in memory only, see data/reminders.ts.
+  const { reminders, preferredMethods, reminderSaved, reminderRemoved } = useReminders()
 
   const loadGuide = useCallback(() => {
     fetchGuide().then(
@@ -105,8 +89,8 @@ export default function App() {
       onDayChange={setDay}
       reminders={reminders}
       preferredMethods={preferredMethods}
-      onReminderSaved={saveReminder}
-      onReminderRemoved={removeReminder}
+      onReminderSaved={reminderSaved}
+      onReminderRemoved={reminderRemoved}
       onOpen={openPlayer}
       onWatchLive={openLive}
       onRetry={retryGuide}
